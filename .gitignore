@@ -1,0 +1,34 @@
+# Dependências
+node_modules/
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+
+# Build e cache
+.next/
+dist/
+build/
+out/
+.vercel/
+
+# Logs e arquivos de sistema
+*.log
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Banco local e uploads de desenvolvimento
+*.sqlite
+*.db
+/uploads/
+
+# TypeScript e testes
+*.tsbuildinfo
+next-env.d.ts
+coverage/
