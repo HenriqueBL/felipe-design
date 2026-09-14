@@ -7,6 +7,10 @@
 
 alter table public.orders add column if not exists production_ready_at timestamptz;
 
+-- promised_delivery_date so e preenchido quando o pedido atinge ready_for_production.
+-- A coluna precisa aceitar NULL na criacao do pedido (create_order insere null).
+alter table public.orders alter column promised_delivery_date drop not null;
+
 -- Backlog redefinido: apenas pedidos que ja estao prontos para producao.
 -- Pedidos pagos mas sem fotos completas nao consomem capacidade.
 create or replace function public.current_backlog_images()

@@ -20,11 +20,94 @@ function requireEnv(name: string, value: string | undefined): string {
 
 describe("Production-ready queue rule (migration 0006)", () => {
   let admin: SupabaseClient;
+  let adminUser: { email: string; password: string };
 
-  beforeAll(() => {
+  /**
+   * Cria plan + price via admin autenticado (não service_role puro).
+   * O service_role key bypassa RLS nas tabelas, mas a policy plans_write_admin
+   * usa is_admin() que depende de auth.uid() — sem sessão, retorna false.
+   * Solução: autenticar como usuário com role='admin' para operações de fixture.
+   */
+  async function createFixturePlan(
+    angles: number,
+    amountCents: number,
+  ): Promise<{ planId: string; priceId: string }> {
+    const adminClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      auth: { persistSession: false },
+    });
+    const { error: signInErr } = await adminClient.auth.signInWithPassword({
+      email: adminUser.email,
+      password: adminUser.password,
+    });
+    if (signInErr) throw new Error(`Admin sign-in failed: ${signInErr.message}`);
+
+    // Upsert: plans tem constraint UNIQUE em angles; reutiliza se já existir
+    const { data: plan, error: planErr } = await adminClient
+      .from("plans")
+      .upsert({ angles, active: true }, { onConflict: "angles" })
+      .select("id")
+      .single();
+    if (planErr || !plan) throw new Error(`Plan insert failed: ${planErr?.message}`);
+
+    // Reutiliza price ativo existente para evitar violação de plan_prices_validity_uq
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existingPrice } = await adminClient
+      .from("plan_prices")
+      .select("id")
+      .eq("plan_id", plan.id)
+      .eq("currency", "BRL")
+      .eq("valid_from", today)
+      .maybeSingle();
+
+    let priceId: string;
+    if (existingPrice) {
+      priceId = existingPrice.id;
+    } else {
+      const { data: price, error: priceErr } = await adminClient
+        .from("plan_prices")
+        .insert({
+          plan_id: plan.id,
+          currency: "BRL",
+          amount_cents: amountCents,
+          valid_from: today,
+          active: true,
+        })
+        .select("id")
+        .single();
+      if (priceErr || !price) throw new Error(`Price insert failed: ${priceErr?.message}`);
+      priceId = price.id;
+    }
+
+    return { planId: plan.id, priceId };
+  }
+
+  beforeAll(async () => {
     const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL);
     const key = requireEnv("SUPABASE_SERVICE_ROLE_KEY", SERVICE_ROLE_KEY);
     admin = createClient(url, key, { auth: { persistSession: false } });
+
+    // Cria usuário admin dedicado para fixtures e promove a role='admin'
+    adminUser = {
+      email: `admin-fixture-${Date.now()}@example.com`,
+      password: "AdminFixture123!",
+    };
+    const { data: adminCreated, error: createErr } = await admin.auth.admin.createUser({
+      email: adminUser.email,
+      password: adminUser.password,
+      email_confirm: true,
+    });
+    if (createErr || !adminCreated?.user) {
+      throw new Error(`Failed to create admin fixture user: ${createErr?.message}`);
+    }
+
+    // Promove a admin via service_role (bypassa RLS na tabela profiles)
+    const { error: updateErr } = await admin
+      .from("profiles")
+      .update({ role: "admin" })
+      .eq("id", adminCreated.user.id);
+    if (updateErr) {
+      throw new Error(`Failed to promote admin user: ${updateErr.message}`);
+    }
   });
 
   it("create_order grava promised_delivery_date como NULL", async () => {
@@ -36,25 +119,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
     expect(user?.user).toBeDefined();
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 1, active: true })
-      .select("id")
-      .single();
-    expect(plan).toBeDefined();
-
-    const { data: price } = await admin
-      .from("plan_prices")
-      .insert({
-        plan_id: plan!.id,
-        currency: "BRL",
-        amount_cents: 7500,
-        valid_from: new Date().toISOString().slice(0, 10),
-        active: true,
-      })
-      .select("id")
-      .single();
-    expect(price).toBeDefined();
+    const { planId } = await createFixturePlan(1, 7500);
 
     // Cria pedido como o usuário (não admin) para testar auth.uid()
     const userClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -66,7 +131,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: order, error } = await userClient.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 2,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
@@ -88,19 +153,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
       email_confirm: true,
     });
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 2, active: true })
-      .select("id")
-      .single();
-
-    await admin.from("plan_prices").insert({
-      plan_id: plan!.id,
-      currency: "BRL",
-      amount_cents: 13000,
-      valid_from: new Date().toISOString().slice(0, 10),
-      active: true,
-    });
+    const { planId } = await createFixturePlan(2, 13000);
 
     const userClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       auth: { persistSession: false },
@@ -111,7 +164,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: order } = await userClient.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 1,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
@@ -140,19 +193,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
       email_confirm: true,
     });
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 1, active: true })
-      .select("id")
-      .single();
-
-    await admin.from("plan_prices").insert({
-      plan_id: plan!.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: new Date().toISOString().slice(0, 10),
-      active: true,
-    });
+    const { planId } = await createFixturePlan(1, 7500);
 
     const userClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       auth: { persistSession: false },
@@ -163,7 +204,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: order } = await userClient.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 2,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
@@ -222,19 +263,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
       email_confirm: true,
     });
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 1, active: true })
-      .select("id")
-      .single();
-
-    await admin.from("plan_prices").insert({
-      plan_id: plan!.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: new Date().toISOString().slice(0, 10),
-      active: true,
-    });
+    const { planId } = await createFixturePlan(1, 7500);
 
     const userClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       auth: { persistSession: false },
@@ -245,7 +274,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: order } = await userClient.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 1,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
@@ -289,19 +318,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
       email_confirm: true,
     });
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 1, active: true })
-      .select("id")
-      .single();
-
-    await admin.from("plan_prices").insert({
-      plan_id: plan!.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: new Date().toISOString().slice(0, 10),
-      active: true,
-    });
+    const { planId } = await createFixturePlan(1, 7500);
 
     const userClient = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       auth: { persistSession: false },
@@ -312,7 +329,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: order } = await userClient.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 1,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
@@ -380,19 +397,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
       email_confirm: true,
     });
 
-    const { data: plan } = await admin
-      .from("plans")
-      .insert({ angles: 1, active: true })
-      .select("id")
-      .single();
-
-    await admin.from("plan_prices").insert({
-      plan_id: plan!.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: new Date().toISOString().slice(0, 10),
-      active: true,
-    });
+    const { planId } = await createFixturePlan(1, 7500);
 
     // Cliente A cria pedido
     const clientA = createClient(SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -404,7 +409,7 @@ describe("Production-ready queue rule (migration 0006)", () => {
     });
 
     const { data: orderA } = await clientA.rpc("create_order", {
-      p_plan_id: plan!.id,
+      p_plan_id: planId,
       p_knife_quantity: 1,
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),

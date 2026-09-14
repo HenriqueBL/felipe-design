@@ -32,3 +32,6 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 coverage/
+
+supabase/.temp/
+.env.test.local
