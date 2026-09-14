@@ -52,7 +52,7 @@ export default async function OrderDetailPage({
           {formatMoney(order.total_cents, order.currency, intlLocale)}
         </p>
         <h2>{dictionary.dashboard.orderDeadline}</h2>
-        <p>{formatDate(order.promised_delivery_date, intlLocale)}</p>
+        <p>{order.promised_delivery_date !== null ? formatDate(order.promised_delivery_date, intlLocale) : "—"}</p>
         <h2>{dictionary.dashboard.orderCreated}</h2>
         <p>{formatDateTime(order.created_at, intlLocale)}</p>
         <h2>{dictionary.dashboard.paidAtLabel}</h2>

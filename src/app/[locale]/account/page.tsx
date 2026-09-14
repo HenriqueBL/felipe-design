@@ -65,8 +65,12 @@ export default async function AccountPage({
                   </div>
                   <div className="order-meta">
                     {dictionary.account.created}: {formatDate(order.created_at.slice(0, 10), intlLocale)}
-                    {" \u00b7 "}
-                    {dictionary.account.deadline}: {formatDate(order.promised_delivery_date, intlLocale)}
+                    {order.promised_delivery_date !== null ? (
+                      <>
+                        {" \u00b7 "}
+                        {dictionary.account.deadline}: {formatDate(order.promised_delivery_date, intlLocale)}
+                      </>
+                    ) : null}
                   </div>
                   <div className="order-meta">
                     {order.total_images} {dictionary.order.imagesLabel}

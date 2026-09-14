@@ -115,9 +115,13 @@ export default async function CustomerOrderPage({
         {dictionary.account.orderNumber} #{shortId}
       </h1>
       <p className="order-subtitle">
-        {dictionary.order.deadlineLabel}:{" "}
-        {formatDateLong(order.promised_delivery_date, intlLocale)}
-        {" · "}
+        {order.promised_delivery_date !== null ? (
+          <>
+            {dictionary.order.deadlineLabel}:{" "}
+            {formatDateLong(order.promised_delivery_date, intlLocale)}
+            {" · "}
+          </>
+        ) : null}
         <span className={"badge " + state}>{stateLabels[state]}</span>
       </p>
 
@@ -150,7 +154,11 @@ export default async function CustomerOrderPage({
           </div>
           <div className="row">
             <span>{dictionary.order.deadlineLabel}</span>
-            <span>{formatDate(order.promised_delivery_date, intlLocale)}</span>
+            <span>
+              {order.promised_delivery_date !== null
+                ? formatDate(order.promised_delivery_date, intlLocale)
+                : dictionary.order.deadlinePending}
+            </span>
           </div>
           <div className="row">
             <span>{dictionary.order.createdLabel}</span>

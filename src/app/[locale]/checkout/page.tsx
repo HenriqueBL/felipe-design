@@ -6,7 +6,7 @@ import { parseCheckoutParams } from "@/domain/checkout";
 import { getActivePlanWithPrice } from "@/services/plans";
 import { fetchDeliveryEstimate } from "@/services/delivery-estimate";
 import { getCurrentUser } from "@/services/auth";
-import { formatDate, formatDateLong, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { checkoutPath, servicesPath } from "@/lib/paths";
 import LoginForm from "@/components/login-form";
 import CreateOrderForm from "@/components/checkout/create-order-form";
@@ -143,17 +143,13 @@ export default async function CheckoutPage({
         </section>
 
         <section className="estimate-panel">
-          <h2>{dictionary.checkout.estimatedDelivery}</h2>
+          <h2>{dictionary.checkout.estimatedTurnaround}</h2>
           {estimate !== null ? (
             <div>
               <span className="deadline-big">
-                {formatDateLong(estimate.promisedDeliveryDate, intlLocale)}
+                {estimate.businessDaysAfterReady} {dictionary.checkout.businessDaysAfterReady}
               </span>
-              <p className="deadline-meta">
-                {dictionary.checkout.startsCounting}:{" "}
-                {formatDate(estimate.startsCountingFrom, intlLocale)} ·{" "}
-                {estimate.businessDaysNeeded} {dictionary.checkout.businessDays}
-              </p>
+              <p className="deadline-meta">{dictionary.checkout.backlogNote}</p>
             </div>
           ) : (
             <p className="deadline-meta">{dictionary.checkout.estimateUnavailable}</p>

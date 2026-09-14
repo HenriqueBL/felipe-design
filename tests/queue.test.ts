@@ -1,186 +1,103 @@
 import { describe, expect, it } from "vitest";
-import { calculatePromisedDeliveryDate } from "@/services/queue";
-
-// Segunda-feira 2026-09-14, 10:00 America/Sao_Paulo (13:00 UTC)
-const MONDAY_10 = new Date("2026-09-14T13:00:00Z");
-// Segunda-feira 2026-09-14, 18:00 America/Sao_Paulo (21:00 UTC)
-const MONDAY_18 = new Date("2026-09-14T21:00:00Z");
-// Sabado 2026-09-19, 10:00 America/Sao_Paulo (13:00 UTC)
-const SATURDAY_10 = new Date("2026-09-19T13:00:00Z");
+import { estimateTurnaroundAfterReady } from "@/services/queue";
 
 const settings = {
   dailyCapacity: 4,
   cutoffTime: "17:00",
   timezone: "America/Sao_Paulo",
+  now: new Date("2026-09-14T13:00:00Z"),
 };
 
-describe("calculatePromisedDeliveryDate", () => {
-  it("backlog vazio com 1 imagem entrega no mesmo dia util", () => {
-    const result = calculatePromisedDeliveryDate({
+describe("estimateTurnaroundAfterReady", () => {
+  it("backlog vazio com 1 imagem retorna 1 dia util apos readiness", () => {
+    const result = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
       backlogImages: 0,
       newImages: 1,
     });
-    expect(result.startsCountingFrom).toBe("2026-09-14");
-    expect(result.businessDaysNeeded).toBe(1);
-    expect(result.promisedDeliveryDate).toBe("2026-09-14");
+    expect(result.businessDaysAfterReady).toBe(1);
+    expect(result.currentBacklogImages).toBe(0);
   });
 
-  it("backlog existente empurra a entrega para o proximo dia util", () => {
-    const result = calculatePromisedDeliveryDate({
+  it("backlog existente soma ao total de dias necessarios", () => {
+    const result = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
       backlogImages: 3,
       newImages: 2,
     });
-    expect(result.businessDaysNeeded).toBe(2);
-    expect(result.promisedDeliveryDate).toBe("2026-09-15");
+    // ceil((3 + 2) / 4) = 2
+    expect(result.businessDaysAfterReady).toBe(2);
+    expect(result.currentBacklogImages).toBe(3);
   });
 
-  it("varias imagens usam ceil e pulam o fim de semana", () => {
-    const result = calculatePromisedDeliveryDate({
+  it("varias imagens usam ceil corretamente", () => {
+    const result = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
       backlogImages: 0,
       newImages: 12,
     });
-    expect(result.businessDaysNeeded).toBe(3);
-    expect(result.promisedDeliveryDate).toBe("2026-09-16");
+    // ceil(12 / 4) = 3
+    expect(result.businessDaysAfterReady).toBe(3);
   });
 
-  it("capacidade diaria atingida pelo backlog entrega no dia seguinte", () => {
-    const result = calculatePromisedDeliveryDate({
+  it("capacidade diaria atingida pelo backlog empurra para proximo dia", () => {
+    const result = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
       backlogImages: 4,
       newImages: 4,
     });
-    expect(result.businessDaysNeeded).toBe(2);
-    expect(result.promisedDeliveryDate).toBe("2026-09-15");
+    // ceil((4 + 4) / 4) = 2
+    expect(result.businessDaysAfterReady).toBe(2);
   });
 
-  it("pedido na sexta antes do corte entrega na propria sexta", () => {
-    const fridayMorning = new Date("2026-09-18T13:00:00Z");
-    const result = calculatePromisedDeliveryDate({
+  it("mudanca da capacidade diaria altera a estimativa", () => {
+    const result = estimateTurnaroundAfterReady({
       ...settings,
-      now: fridayMorning,
-      backlogImages: 0,
-      newImages: 4,
-    });
-    expect(result.promisedDeliveryDate).toBe("2026-09-18");
-  });
-
-  it("pedido no sabado comeca na segunda", () => {
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: SATURDAY_10,
-      backlogImages: 0,
-      newImages: 1,
-    });
-    expect(result.startsCountingFrom).toBe("2026-09-21");
-    expect(result.promisedDeliveryDate).toBe("2026-09-21");
-  });
-
-  it("pedido no domingo comeca na segunda", () => {
-    const sunday = new Date("2026-09-20T13:00:00Z");
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: sunday,
-      backlogImages: 0,
-      newImages: 1,
-    });
-    expect(result.startsCountingFrom).toBe("2026-09-21");
-    expect(result.promisedDeliveryDate).toBe("2026-09-21");
-  });
-
-  it("pagamento antes do horario de corte conta a partir de hoje", () => {
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: MONDAY_10,
-      backlogImages: 0,
-      newImages: 1,
-    });
-    expect(result.startsCountingFrom).toBe("2026-09-14");
-  });
-
-  it("pagamento depois do horario de corte comeca no proximo dia util", () => {
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: MONDAY_18,
-      backlogImages: 0,
-      newImages: 1,
-    });
-    expect(result.startsCountingFrom).toBe("2026-09-15");
-    expect(result.promisedDeliveryDate).toBe("2026-09-15");
-  });
-
-  it("mudanca posterior da capacidade diaria altera o prazo", () => {
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: MONDAY_10,
       backlogImages: 0,
       newImages: 12,
       dailyCapacity: 6,
     });
-    expect(result.businessDaysNeeded).toBe(2);
-    expect(result.promisedDeliveryDate).toBe("2026-09-15");
+    // ceil(12 / 6) = 2
+    expect(result.businessDaysAfterReady).toBe(2);
   });
 
   it("dois pedidos quase simultaneos consideram o backlog acumulado", () => {
-    const first = calculatePromisedDeliveryDate({
+    const first = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
       backlogImages: 0,
       newImages: 4,
     });
-    expect(first.promisedDeliveryDate).toBe("2026-09-14");
+    expect(first.businessDaysAfterReady).toBe(1);
 
-    const second = calculatePromisedDeliveryDate({
+    // Simula segundo pedido vendo o primeiro ja no backlog
+    const second = estimateTurnaroundAfterReady({
       ...settings,
-      now: MONDAY_10,
-      backlogImages: first.businessDaysNeeded * 4,
+      backlogImages: 4,
       newImages: 4,
     });
-    expect(second.businessDaysNeeded).toBe(2);
-    expect(second.promisedDeliveryDate).toBe("2026-09-15");
-  });
-
-  it("dias bloqueados (feriados) empurram a entrega", () => {
-    const result = calculatePromisedDeliveryDate({
-      ...settings,
-      now: MONDAY_10,
-      backlogImages: 0,
-      newImages: 1,
-      blockedDates: ["2026-09-14"],
-    });
-    expect(result.startsCountingFrom).toBe("2026-09-15");
-    expect(result.promisedDeliveryDate).toBe("2026-09-15");
+    expect(second.businessDaysAfterReady).toBe(2);
   });
 
   it("rejeita configuracoes invalidas", () => {
     expect(() =>
-      calculatePromisedDeliveryDate({
+      estimateTurnaroundAfterReady({
         ...settings,
-        now: MONDAY_10,
         backlogImages: 0,
         newImages: 1,
         dailyCapacity: 0,
       }),
     ).toThrow();
     expect(() =>
-      calculatePromisedDeliveryDate({
+      estimateTurnaroundAfterReady({
         ...settings,
-        now: MONDAY_10,
         backlogImages: 0,
         newImages: 1,
         cutoffTime: "25:00",
       }),
     ).toThrow();
     expect(() =>
-      calculatePromisedDeliveryDate({
+      estimateTurnaroundAfterReady({
         ...settings,
-        now: MONDAY_10,
         backlogImages: 0,
         newImages: 1,
         timezone: "Not/AZone",

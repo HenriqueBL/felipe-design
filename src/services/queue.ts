@@ -1,17 +1,8 @@
 import { z } from "zod";
+import { isValidISODateString } from "@/domain/business-days";
 import {
-  addBusinessDays,
-  isBusinessDay,
-  isValidISODateString,
-  nextBusinessDay,
-  toISODate,
-  type CalendarDate,
-} from "@/domain/business-days";
-import {
-  getZonedParts,
   isValidTimeFormat,
   isValidTimezone,
-  parseTimeToMinutes,
 } from "@/domain/zoned-time";
 
 export const queueSettingsSchema = z.object({
@@ -33,39 +24,23 @@ export const deadlineInputSchema = queueSettingsSchema.extend({
 
 export type DeadlineInput = z.infer<typeof deadlineInputSchema>;
 
-export interface DeadlineResult {
-  startsCountingFrom: string;
-  businessDaysNeeded: number;
-  promisedDeliveryDate: string;
+export interface TurnaroundEstimate {
+  businessDaysAfterReady: number;
+  currentBacklogImages: number;
 }
 
-export function calculatePromisedDeliveryDate(input: DeadlineInput): DeadlineResult {
+// Estimativa comercial pre-compra: quantos dias uteis de producao serao
+// necessarios apos o pedido ficar ready_for_production. Nao retorna data
+// absoluta porque o prazo definitivo so existe quando pagamento + fotos
+// completas sao satisfeitos (migration 0006).
+export function estimateTurnaroundAfterReady(input: DeadlineInput): TurnaroundEstimate {
   const parsed = deadlineInputSchema.parse(input);
-  const blockedDates = new Set(parsed.blockedDates ?? []);
-
-  const zonedParts = getZonedParts(parsed.now, parsed.timezone);
-  const today: CalendarDate = {
-    year: zonedParts.year,
-    month: zonedParts.month,
-    day: zonedParts.day,
-  };
-
-  const minutesNow = zonedParts.hour * 60 + zonedParts.minute;
-  const afterCutoff = minutesNow >= parseTimeToMinutes(parsed.cutoffTime);
-
-  const firstProductionDay =
-    afterCutoff || !isBusinessDay(today, blockedDates)
-      ? nextBusinessDay(today, blockedDates)
-      : today;
 
   const totalImages = parsed.backlogImages + parsed.newImages;
-  const businessDaysNeeded = Math.ceil(totalImages / parsed.dailyCapacity);
-
-  const promisedDate = addBusinessDays(firstProductionDay, businessDaysNeeded - 1, blockedDates);
+  const businessDaysAfterReady = Math.ceil(totalImages / parsed.dailyCapacity);
 
   return {
-    startsCountingFrom: toISODate(firstProductionDay),
-    businessDaysNeeded,
-    promisedDeliveryDate: toISODate(promisedDate),
+    businessDaysAfterReady,
+    currentBacklogImages: parsed.backlogImages,
   };
 }

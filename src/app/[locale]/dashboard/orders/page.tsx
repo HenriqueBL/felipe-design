@@ -44,7 +44,7 @@ export default async function DashboardOrdersPage({
                     {orderStatusLabel(order.status, current)}
                   </span>
                 </td>
-                <td>{order.promised_delivery_date}</td>
+                <td>{order.promised_delivery_date ?? "—"}</td>
                 <td>{formatDateTime(order.created_at, intlLocale)}</td>
                 <td>
                   <Link href={"/" + current + "/dashboard/orders/" + order.id}>

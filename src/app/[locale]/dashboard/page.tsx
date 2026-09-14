@@ -63,7 +63,7 @@ export default async function DashboardHomePage({
                     {orderStatusLabel(order.status, current)}
                   </span>
                 </td>
-                <td>{order.promised_delivery_date}</td>
+                <td>{order.promised_delivery_date ?? "—"}</td>
               </tr>
             ))}
           </tbody>

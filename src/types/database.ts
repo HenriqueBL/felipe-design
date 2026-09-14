@@ -90,7 +90,8 @@ export type OrderRow = {
   subtotal_cents: number;
   total_cents: number;
   status: OrderStatus;
-  promised_delivery_date: string;
+  promised_delivery_date: string | null;
+  production_ready_at: string | null;
   affiliate_id: string | null;
   paid_at: string | null;
   source_image_count: number;
@@ -307,9 +308,8 @@ export type AppSettingUpdate = {
 };
 
 export type EstimateDeliveryResult = {
-  startsCountingFrom: string;
-  businessDaysNeeded: number;
-  promisedDeliveryDate: string;
+  businessDaysAfterReady: number;
+  currentBacklogImages: number;
 };
 
 export type Database = {
