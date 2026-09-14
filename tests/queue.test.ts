@@ -105,3 +105,9 @@ describe("estimateTurnaroundAfterReady", () => {
     ).toThrow();
   });
 });
+
+// Cenarios de calendario (cutoff, fim de semana) foram movidos para testes
+// de integracao contra PostgreSQL, pois a logica definitiva vive nas RPCs
+// maybe_mark_order_ready e confirm_order_payment (migration 0006).
+// A funcao estimateTurnaroundAfterReady e puramente aritmetica (ceil/backlog)
+// e nao depende de data/hora; os testes acima cobrem sua responsabilidade.
