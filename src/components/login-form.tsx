@@ -12,7 +12,13 @@ interface LoginLabels {
   error: string;
 }
 
-export default function LoginForm({ locale, labels }: { locale: Locale; labels: LoginLabels }) {
+interface LoginFormProps {
+  locale: Locale;
+  labels: LoginLabels;
+  next?: string;
+}
+
+export default function LoginForm({ locale, labels, next }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const supabase = createSupabaseBrowserClient();
@@ -21,10 +27,14 @@ export default function LoginForm({ locale, labels }: { locale: Locale; labels: 
     event.preventDefault();
     setStatus("sending");
 
+    const redirectTo = next
+      ? `/auth/callback?next=${encodeURIComponent(next)}`
+      : `/auth/callback?next=/${locale}`;
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/${locale}`,
+        emailRedirectTo: `${window.location.origin}${redirectTo}`,
       },
     });
 

@@ -1,0 +1,209 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { getDictionary } from "@/lib/i18n/dictionaries";
+import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
+import { parseCheckoutParams } from "@/domain/checkout";
+import { getActivePlanWithPrice } from "@/services/plans";
+import { fetchDeliveryEstimate } from "@/services/delivery-estimate";
+import { getCurrentUser } from "@/services/auth";
+import { formatDate, formatDateLong, formatMoney } from "@/lib/format";
+import { checkoutPath, servicesPath } from "@/lib/paths";
+import LoginForm from "@/components/login-form";
+import CreateOrderForm from "@/components/checkout/create-order-form";
+import type { EstimateDeliveryResult } from "@/types/database";
+
+function resolve(locale: string): Locale {
+  return isLocale(locale) ? locale : defaultLocale;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const current = resolve((await params).locale);
+  const dictionary = await getDictionary(current);
+  return {
+    title: dictionary.checkout.title + " | Felipe Design",
+    robots: { index: false, follow: false },
+  };
+}
+
+function toURLSearchParams(
+  input: Record<string, string | string[] | undefined>,
+): URLSearchParams {
+  const output = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "string") {
+      output.set(key, value);
+    }
+  }
+  return output;
+}
+
+export default async function CheckoutPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const current = resolve((await params).locale);
+  const query = await searchParams;
+  const dictionary = await getDictionary(current);
+  const intlLocale = current === "pt" ? "pt-BR" : "en-US";
+
+  const checkoutParams = parseCheckoutParams(toURLSearchParams(query));
+
+  if (!checkoutParams) {
+    return (
+      <main className="checkout-wrap">
+        <h1>{dictionary.checkout.title}</h1>
+        <p className="state-note">{dictionary.checkout.invalidSelection}</p>
+        <Link href={servicesPath(current)} className="back-link">
+          {dictionary.checkout.backToServices}
+        </Link>
+      </main>
+    );
+  }
+
+  const planWithPrice = await getActivePlanWithPrice(
+    checkoutParams.planId,
+    checkoutParams.currency,
+  ).catch(() => null);
+
+  if (!planWithPrice) {
+    return (
+      <main className="checkout-wrap">
+        <h1>{dictionary.checkout.title}</h1>
+        <p className="state-note">{dictionary.checkout.planUnavailable}</p>
+        <Link href={servicesPath(current)} className="back-link">
+          {dictionary.checkout.backToServices}
+        </Link>
+      </main>
+    );
+  }
+
+  const { plan, priceCents } = planWithPrice;
+  const totalImages = checkoutParams.quantity * plan.angles;
+  const totalCents = priceCents * checkoutParams.quantity;
+
+  // Prazo vem sempre do backend (RPC estimate_delivery), nunca do browser.
+  let estimate: EstimateDeliveryResult | null = null;
+  try {
+    estimate = await fetchDeliveryEstimate(totalImages);
+  } catch {
+    estimate = null;
+  }
+
+  const user = await getCurrentUser();
+
+  // URL de retorno pos-login preserva apenas a intencao (plano, quantidade,
+  // moeda, chave). Preco, total e prazo sao recalculados no servidor.
+  const nextUrl =
+    checkoutPath(current) +
+    "?" +
+    new URLSearchParams({
+      plan: checkoutParams.planId,
+      qty: String(checkoutParams.quantity),
+      currency: checkoutParams.currency,
+      key: checkoutParams.idempotencyKey,
+    }).toString();
+
+  return (
+    <main className="checkout-wrap">
+      <h1>{dictionary.checkout.title}</h1>
+      <div className="checkout-grid">
+        <section className="summary-panel">
+          <h2>{dictionary.checkout.summaryTitle}</h2>
+          <div className="summary-rows">
+            <div className="row">
+              <span>{dictionary.checkout.planLabel}</span>
+              <span>
+                {plan.angles} {dictionary.services.anglesLabel}
+              </span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.knivesLabel}</span>
+              <span>{checkoutParams.quantity}</span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.imagesLabel}</span>
+              <span>{totalImages}</span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.unitPrice}</span>
+              <span>{formatMoney(priceCents, checkoutParams.currency, intlLocale)}</span>
+            </div>
+            <div className="row total">
+              <span>{dictionary.checkout.total}</span>
+              <span>{formatMoney(totalCents, checkoutParams.currency, intlLocale)}</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="estimate-panel">
+          <h2>{dictionary.checkout.estimatedDelivery}</h2>
+          {estimate !== null ? (
+            <div>
+              <span className="deadline-big">
+                {formatDateLong(estimate.promisedDeliveryDate, intlLocale)}
+              </span>
+              <p className="deadline-meta">
+                {dictionary.checkout.startsCounting}:{" "}
+                {formatDate(estimate.startsCountingFrom, intlLocale)} ·{" "}
+                {estimate.businessDaysNeeded} {dictionary.checkout.businessDays}
+              </p>
+            </div>
+          ) : (
+            <p className="deadline-meta">{dictionary.checkout.estimateUnavailable}</p>
+          )}
+          <p className="note">{dictionary.checkout.deadlineNote}</p>
+        </section>
+
+        <section className="auth-panel">
+          {user ? (
+            <div>
+              <p className="note">
+                {dictionary.checkout.signedInAs} {user.email}
+              </p>
+              <CreateOrderForm
+                locale={current}
+                labels={{
+                  createOrder: dictionary.checkout.createOrder,
+                  creating: dictionary.checkout.creating,
+                  invalidSelection: dictionary.checkout.invalidSelection,
+                  loginRequired: dictionary.checkout.loginRequired,
+                  planUnavailable: dictionary.checkout.planUnavailable,
+                  error: dictionary.checkout.error,
+                }}
+                planId={checkoutParams.planId}
+                quantity={checkoutParams.quantity}
+                currency={checkoutParams.currency}
+                idempotencyKey={checkoutParams.idempotencyKey}
+              />
+            </div>
+          ) : (
+            <div>
+              <p className="note">{dictionary.checkout.loginRequired}</p>
+              <LoginForm
+                locale={current}
+                labels={{
+                  emailLabel: dictionary.checkout.emailLabel,
+                  emailPlaceholder: dictionary.checkout.emailPlaceholder,
+                  submit: dictionary.checkout.sendMagicLink,
+                  success: dictionary.checkout.magicLinkSent,
+                  error: dictionary.checkout.error,
+                }}
+                next={nextUrl}
+              />
+            </div>
+          )}
+        </section>
+      </div>
+      <Link href={servicesPath(current)} className="back-link">
+        {dictionary.checkout.backToServices}
+      </Link>
+    </main>
+  );
+}

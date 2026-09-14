@@ -18,6 +18,16 @@ export function formatDate(value: string, locale: string): string {
   }).format(date);
 }
 
+export function formatDateLong(value: string, locale: string): string {
+  const date = new Date(value + "T00:00:00Z");
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export function formatDateTime(value: string, locale: string): string {
   const date = new Date(value);
   return new Intl.DateTimeFormat(locale, {

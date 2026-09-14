@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
+import { servicesPath } from "@/lib/paths";
 
 export default async function HomePage({
   params,
@@ -18,7 +19,7 @@ export default async function HomePage({
           <h1>{dictionary.home.heroTitle}</h1>
           <p>{dictionary.home.heroSubtitle}</p>
           <div className="hero-actions">
-            <Link href={`/${current}/login`} className="btn btn-primary">
+            <Link href={servicesPath(current)} className="btn btn-primary">
               {dictionary.home.ctaPrimary}
             </Link>
             <a href="#before-after" className="btn btn-secondary">
@@ -37,14 +38,14 @@ export default async function HomePage({
                 <div className="ba-side">{dictionary.home.beforeLabel}</div>
                 <div className="ba-side">{dictionary.home.afterLabel}</div>
               </div>
-              <div className="ba-caption">Portfolio coming soon</div>
+              <div className="ba-caption">{dictionary.home.portfolioComingSoon}</div>
             </div>
             <div className="before-after">
               <div className="ba-images">
                 <div className="ba-side">{dictionary.home.beforeLabel}</div>
                 <div className="ba-side">{dictionary.home.afterLabel}</div>
               </div>
-              <div className="ba-caption">Portfolio coming soon</div>
+              <div className="ba-caption">{dictionary.home.portfolioComingSoon}</div>
             </div>
           </div>
         </div>

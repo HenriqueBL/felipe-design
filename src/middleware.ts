@@ -18,9 +18,20 @@ export async function middleware(request: NextRequest) {
   }
   const locale = maybeLocale;
 
+  // Area do cliente exige autenticacao; o fluxo original e preservado via next.
+  // Middleware roda antes dos rewrites, entao cobrimos tambem o caminho publico de PT.
+  const section = segments[1] ?? "";
+  if ((section === "account" || section === "conta") && !user) {
+    const loginUrl = new URL(`/${locale}/login`, request.url);
+    loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
+  }
+
   if (segments[1] === "dashboard") {
     if (!user) {
-      return NextResponse.redirect(new URL(`/${locale}/login`, request.url));
+      const loginUrl = new URL(`/${locale}/login`, request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
     }
     const { data: profile } = await supabase
       .from("profiles")

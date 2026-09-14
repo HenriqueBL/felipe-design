@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { buildResultPath, validateUploadFile } from "@/domain/checkout";
 import { requireEnv } from "@/lib/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isAdminUser } from "@/services/auth";
 import { setOrderStatus } from "@/services/orders";
 import { setPlanActive, updatePlanPrice } from "@/services/plans";
 import { updateAppSettings } from "@/services/settings";
@@ -160,4 +163,68 @@ export async function validateServerEnvironment(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Envio dos arquivos finais da entrega pelo admin. Valida papel no servidor,
+// extensao, MIME e tamanho; sobe para o bucket privado order-results e
+// registra em order_images (kind = result) para o cliente baixar via signed URL.
+export async function uploadOrderResultsAction(
+  locale: string,
+  _prevState: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = z.string().uuid().safeParse(formData.get("orderId"));
+  if (!parsed.success) {
+    return { success: false, message: "Invalid order." };
+  }
+
+  if (!(await isAdminUser())) {
+    return { success: false, message: "Forbidden." };
+  }
+
+  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
+  if (files.length === 0) {
+    return { success: false, message: "No files selected." };
+  }
+
+  for (const file of files) {
+    const validation = validateUploadFile(file.name, file.type, file.size);
+    if (!validation.ok) {
+      return { success: false, message: "Invalid file: " + file.name };
+    }
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("user_id")
+    .eq("id", parsed.data)
+    .maybeSingle();
+  if (!order) {
+    return { success: false, message: "Order not found." };
+  }
+
+  for (const file of files) {
+    const storagePath = buildResultPath(order.user_id, parsed.data, file.name);
+    const { error: storageError } = await supabase.storage
+      .from("order-results")
+      .upload(storagePath, file, { contentType: file.type });
+    if (storageError) {
+      return { success: false, message: "Upload failed: " + file.name };
+    }
+
+    const { error: dbError } = await supabase.from("order_images").insert({
+      order_id: parsed.data,
+      kind: "result",
+      storage_path: storagePath,
+      original_filename: file.name,
+    });
+    if (dbError) {
+      await supabase.storage.from("order-results").remove([storagePath]);
+      return { success: false, message: "Could not register: " + file.name };
+    }
+  }
+
+  revalidatePath("/" + safeLocale(locale) + "/dashboard/orders/" + parsed.data);
+  return { success: true, message: "Results uploaded." };
 }

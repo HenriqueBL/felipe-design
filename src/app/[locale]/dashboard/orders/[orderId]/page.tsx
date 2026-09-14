@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
-import { getOrderById } from "@/services/orders";
-import { formatDateTime, formatMoney, orderStatusLabel } from "@/lib/format";
+import { getAdminOrderDetail } from "@/services/admin-orders";
+import { formatDate, formatDateTime, formatMoney, orderStatusLabel } from "@/lib/format";
 import OrderStatusForm from "@/components/dashboard/order-status-form";
+import ResultUploadForm from "@/components/dashboard/result-upload-form";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function OrderDetailPage({
   params,
@@ -13,12 +17,18 @@ export default async function OrderDetailPage({
   const { locale, orderId } = await params;
   const current: Locale = isLocale(locale) ? locale : defaultLocale;
   const dictionary = await getDictionary(current);
-  const order = await getOrderById(orderId);
 
-  if (!order) {
+  if (!UUID_PATTERN.test(orderId)) {
     notFound();
   }
 
+  // RLS permite ao admin enxergar qualquer pedido; a consulta falha graciosamente.
+  const detail = await getAdminOrderDetail(orderId).catch(() => null);
+  if (!detail) {
+    notFound();
+  }
+
+  const { order, customerEmail, planAngles, sourceImages, resultImages, revisions } = detail;
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   return (
@@ -26,20 +36,31 @@ export default async function OrderDetailPage({
       <h1>{dictionary.dashboard.orderDetailTitle}</h1>
 
       <div className="panel">
-        <h2>{dictionary.dashboard.orderId}</h2>
-        <p>{order.id}</p>
-        <h2>{dictionary.dashboard.orderUser}</h2>
-        <p>{order.customer_email ?? order.user_id}</p>
+        <h2>{dictionary.dashboard.customerLabel}</h2>
+        <p>{customerEmail ?? order.user_id}</p>
+        <h2>{dictionary.dashboard.orderPlan}</h2>
+        <p>
+          {planAngles ?? "-"} {dictionary.services.anglesLabel}
+        </p>
         <h2>{dictionary.dashboard.orderQuantity}</h2>
         <p>{order.knife_quantity}</p>
         <h2>{dictionary.dashboard.orderImages}</h2>
         <p>{order.total_images}</p>
-        <h2>{dictionary.dashboard.orderTotal}</h2>
-        <p>{formatMoney(order.total_cents, order.currency, intlLocale)}</p>
+        <h2>{dictionary.dashboard.snapshotPrice}</h2>
+        <p>
+          {formatMoney(order.unit_price_cents, order.currency, intlLocale)} ·{" "}
+          {formatMoney(order.total_cents, order.currency, intlLocale)}
+        </p>
         <h2>{dictionary.dashboard.orderDeadline}</h2>
-        <p>{order.promised_delivery_date}</p>
+        <p>{formatDate(order.promised_delivery_date, intlLocale)}</p>
         <h2>{dictionary.dashboard.orderCreated}</h2>
         <p>{formatDateTime(order.created_at, intlLocale)}</p>
+        <h2>{dictionary.dashboard.paidAtLabel}</h2>
+        <p>
+          {order.paid_at !== null
+            ? formatDateTime(order.paid_at, intlLocale)
+            : dictionary.dashboard.notPaidYet}
+        </p>
         <h2>{dictionary.dashboard.orderStatus}</h2>
         <p>
           <span className={"badge " + order.status}>
@@ -59,6 +80,81 @@ export default async function OrderDetailPage({
           }}
         />
       </div>
+
+      <div className="panel">
+        <h2>{dictionary.dashboard.customerPhotosTitle}</h2>
+        {sourceImages.length === 0 ? (
+          <p>{dictionary.dashboard.noPhotos}</p>
+        ) : (
+          <ul className="photo-list">
+            {sourceImages.map((image) => (
+              <li key={image.id}>
+                <span>{image.original_filename ?? image.storage_path}</span>
+                {image.signedUrl !== null ? (
+                  <a
+                    className="btn btn-secondary"
+                    href={image.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {dictionary.dashboard.openPhoto}
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="note">
+          {dictionary.dashboard.photosLabel}: {sourceImages.length}/{order.total_images}
+        </p>
+      </div>
+
+      <div className="panel">
+        <ResultUploadForm
+          locale={current}
+          orderId={order.id}
+          labels={{
+            title: dictionary.dashboard.resultUploadTitle,
+            hint: dictionary.dashboard.resultUploadHint,
+            button: dictionary.dashboard.resultUploadButton,
+            uploading: dictionary.dashboard.resultUploading,
+            error: dictionary.dashboard.saveError,
+          }}
+        />
+        {resultImages.length > 0 ? (
+          <ul className="photo-list">
+            {resultImages.map((image) => (
+              <li key={image.id}>
+                <span>{image.original_filename ?? image.storage_path}</span>
+                {image.signedUrl !== null ? (
+                  <a
+                    className="btn btn-secondary"
+                    href={image.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {dictionary.dashboard.openPhoto}
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      {revisions.length > 0 ? (
+        <div className="panel">
+          <h2>{dictionary.dashboard.revisionTitleAdmin}</h2>
+          {revisions.map((revision) => (
+            <div key={revision.id}>
+              <p>
+                #{revision.round} · {revision.status}
+              </p>
+              {revision.notes !== null ? <p className="note">{revision.notes}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

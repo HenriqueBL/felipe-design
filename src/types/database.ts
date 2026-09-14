@@ -1,5 +1,5 @@
 // Database types kept in sync with supabase/migrations.
-// Regenerate with `supabase gen types` once the project is linked to Supabase.
+// Regenerate with supabase gen types once the project is linked to Supabase.
 
 export type Json =
   | string
@@ -14,7 +14,7 @@ export type Currency = "BRL" | "USD";
 export type OrderStatus = "pending" | "in_progress" | "completed" | "cancelled";
 export type OrderImageKind = "source" | "result";
 export type RevisionStatus = "requested" | "in_progress" | "completed";
-export type PaymentProviderId = "stripe" | "mercadopago" | "nowpayments";
+export type PaymentProviderId = "stripe" | "mercadopago" | "nowpayments" | "mock";
 export type PaymentStatus = "pending" | "processing" | "paid" | "failed" | "refunded";
 export type CommissionStatus = "pending" | "paid";
 
@@ -92,6 +92,9 @@ export type OrderRow = {
   status: OrderStatus;
   promised_delivery_date: string;
   affiliate_id: string | null;
+  paid_at: string | null;
+  source_image_count: number;
+  idempotency_key: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -109,11 +112,17 @@ export type OrderInsert = {
   status?: OrderStatus;
   promised_delivery_date: string;
   affiliate_id?: string | null;
+  paid_at?: string | null;
+  source_image_count?: number;
+  idempotency_key?: string | null;
   notes?: string | null;
 };
 export type OrderUpdate = {
   status?: OrderStatus;
   notes?: string | null;
+  paid_at?: string | null;
+  source_image_count?: number;
+  idempotency_key?: string | null;
 };
 
 export type OrderImageRow = {
@@ -327,12 +336,38 @@ export type Database = {
           p_knife_quantity: number;
           p_currency: Currency;
           p_affiliate_code?: string;
+          p_idempotency_key?: string;
         };
         Returns: OrderRow;
       };
       estimate_delivery: {
         Args: { p_new_images: number };
         Returns: EstimateDeliveryResult;
+      };
+      record_payment_intent: {
+        Args: {
+          p_order_id: string;
+          p_provider: PaymentProviderId;
+          p_external_payment_id: string;
+          p_amount_cents: number;
+          p_currency: Currency;
+        };
+        Returns: PaymentRow;
+      };
+      confirm_order_payment: {
+        Args: {
+          p_order_id: string;
+          p_provider: PaymentProviderId;
+          p_external_payment_id: string;
+          p_provider_event_id: string;
+          p_amount_cents: number;
+          p_currency: Currency;
+        };
+        Returns: OrderRow;
+      };
+      request_order_revision: {
+        Args: { p_order_id: string; p_notes: string };
+        Returns: OrderRevisionRow;
       };
       set_plan_price: {
         Args: { p_plan_id: string; p_currency: Currency; p_amount_cents: number };

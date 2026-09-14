@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
+import { accountPath, servicesPath } from "@/lib/paths";
 import "../globals.css";
 
 export function generateStaticParams() {
@@ -56,6 +57,8 @@ export default async function LocaleLayout({
               Felipe Design
             </Link>
             <nav className="site-nav">
+              <Link href={servicesPath(current)}>{dictionary.nav.services}</Link>
+              <Link href={accountPath(current)}>{dictionary.nav.account}</Link>
               <Link href={`/${current}/login`}>{dictionary.nav.login}</Link>
               <div className="locale-switch">
                 <Link href="/en" aria-label="English">

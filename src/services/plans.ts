@@ -5,15 +5,22 @@ export interface PlanWithPrices extends PlanRow {
   prices: PlanPriceRow[];
 }
 
+export interface ActivePlan {
+  id: string;
+  angles: number;
+  prices: Record<Currency, number | null>;
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export async function listPlans(): Promise<PlanWithPrices[]> {
   const supabase = await createSupabaseServerClient();
 
   const [plansResult, pricesResult] = await Promise.all([
     supabase.from("plans").select("*").order("angles"),
-    supabase
-      .from("plan_prices")
-      .select("*")
-      .order("valid_from", { ascending: false }),
+    supabase.from("plan_prices").select("*").order("valid_from", { ascending: false }),
   ]);
 
   if (plansResult.error) {
@@ -34,6 +41,87 @@ export async function listPlans(): Promise<PlanWithPrices[]> {
     ...plan,
     prices: pricesByPlan.get(plan.id) ?? [],
   }));
+}
+
+export async function listActivePlans(): Promise<ActivePlan[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const [plansResult, pricesResult] = await Promise.all([
+    supabase.from("plans").select("*").eq("active", true).order("angles"),
+    supabase.from("plan_prices").select("*").eq("active", true),
+  ]);
+
+  if (plansResult.error) {
+    throw new Error("Failed to list active plans: " + plansResult.error.message);
+  }
+  if (pricesResult.error) {
+    throw new Error("Failed to list active prices: " + pricesResult.error.message);
+  }
+
+  const today = todayISO();
+  const plans = new Map<string, ActivePlan>();
+  for (const plan of plansResult.data ?? []) {
+    plans.set(plan.id, {
+      id: plan.id,
+      angles: plan.angles,
+      prices: { BRL: null, USD: null },
+    });
+  }
+
+  for (const price of pricesResult.data ?? []) {
+    const entry = plans.get(price.plan_id);
+    if (!entry) {
+      continue;
+    }
+    const validFromOk = price.valid_from <= today;
+    const validUntilOk = price.valid_until === null || price.valid_until >= today;
+    if (validFromOk && validUntilOk && entry.prices[price.currency] === null) {
+      entry.prices[price.currency] = price.amount_cents;
+    }
+  }
+
+  return Array.from(plans.values());
+}
+
+export interface PlanWithPrice {
+  plan: PlanRow;
+  priceCents: number;
+}
+
+export async function getActivePlanWithPrice(
+  planId: string,
+  currency: Currency,
+): Promise<PlanWithPrice | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data: plan, error: planError } = await supabase
+    .from("plans")
+    .select("*")
+    .eq("id", planId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (planError || !plan) {
+    return null;
+  }
+
+  const today = todayISO();
+  const { data: price, error: priceError } = await supabase
+    .from("plan_prices")
+    .select("*")
+    .eq("plan_id", planId)
+    .eq("currency", currency)
+    .eq("active", true)
+    .lte("valid_from", today)
+    .or("valid_until.is.null,valid_until.gte." + today)
+    .order("valid_from", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (priceError || !price) {
+    return null;
+  }
+
+  return { plan, priceCents: price.amount_cents };
 }
 
 export interface UpdatePlanPriceInput {
