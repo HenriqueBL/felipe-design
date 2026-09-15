@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
 
@@ -171,16 +171,18 @@ async function signInUser(
 /**
  * Creates or reuses a plan + price fixture via an authenticated admin client.
  *
- * WHY NOT service_role directly?
- * The service_role key bypasses RLS on table-level operations (.from()), BUT
- * the RLS policy `plans_write_admin` uses `is_admin()` which is a SECURITY
- * DEFINER function that checks `auth.uid()` against `profiles.role`. When
- * using service_role without an authenticated session, `auth.uid()` returns
- * NULL, so `is_admin()` returns false and the insert is blocked.
+ * WHY NOT service_role directly for .from("plans") inserts?
+ * The service_role key DOES bypass RLS on table-level operations. However,
+ * in earlier testing the insert failed — the root cause was never conclusively
+ * proven to be RLS evaluation under BYPASSRLS (which would contradict Postgres
+ * semantics). Possible causes include: supabase-js internal header handling,
+ * a trigger or constraint firing before RLS bypass takes effect, or an
+ * intermediate RPC/proxy layer evaluating is_admin() outside the RLS context.
  *
- * The correct approach: authenticate as a real user with role='admin', then
- * use the anon key client with that user's JWT. This gives us both a valid
- * `auth.uid()` AND passes the `is_admin()` check.
+ * Regardless of the exact cause, the authenticated-admin-client approach is
+ * architecturally superior: it exercises the same authorization path as real
+ * admin users, avoids relying on service_role bypass for business operations,
+ * and keeps the service client reserved for privileged setup/teardown only.
  */
 async function createFixturePlan(
   adminClient: SupabaseClient,
@@ -1344,6 +1346,59 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
     });
     expect(second!.paid_at).toBe(confirmed!.paid_at);
+  });
+
+  // ===========================================================================
+  // MOCK PAYMENT PROVIDER — ABSTRAÇÃO REAL (FASE 2)
+  // ===========================================================================
+  it("MockPaymentProvider abstração real: simulateMockPayment via server action path", async () => {
+    // Este teste prova que MockPaymentProvider está realmente conectado ao fluxo
+    // server-side, não apenas que as RPCs individuais funcionam.
+    // Mockamos createSupabaseServerClient para retornar um client autenticado
+    // como usuário fixture, permitindo invocar simulateMockPayment sem Next.js runtime.
+    const user = await createFixtureUser(service, "mock-abs");
+    createdUserIds.push(user.userId);
+    const userClient = await signInUser(user.email, user.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    const { data: order } = await userClient.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(order!.paid_at).toBeNull();
+
+    // Mock createSupabaseServerClient to return authenticated user client
+    const { simulateMockPayment } = await import("@/services/mock-payment-flow");
+    const serverModule = await import("@/lib/supabase/server");
+
+    // Replace with a function that returns our authenticated user client.
+    // The server client type is compatible with SupabaseClient for RPC/from calls.
+    vi.spyOn(serverModule, "createSupabaseServerClient").mockResolvedValue(
+      userClient as SupabaseClient,
+    );
+
+    try {
+      // Invoke the REAL abstraction: simulateMockPayment uses MockPaymentProvider
+      // internally (createPaymentIntent → record_payment_intent → confirm_order_payment)
+      const result = await simulateMockPayment(order!.id);
+
+      // Prove the abstraction produced the expected state change
+      expect(result.paid_at).not.toBeNull();
+      expect(result.id).toBe(order!.id);
+
+      // Verify in DB via service client
+      const { data: verified } = await service
+        .from("orders")
+        .select("paid_at")
+        .eq("id", order!.id)
+        .single();
+      expect(verified!.paid_at).not.toBeNull();
+    } finally {
+      // Restore original implementation
+      vi.restoreAllMocks();
+    }
   });
 
   // ===========================================================================
