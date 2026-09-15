@@ -1,0 +1,24 @@
+# Normalize line endings for all text files
+* text=auto eol=lf
+
+# Explicitly mark binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Shell scripts must use LF
+*.sh text eol=lf
+
+# Windows batch files must use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# SQL migrations should be consistent LF
+*.sql text eol=lf

@@ -2,7 +2,13 @@
 
 Portfólio e plataforma de contratação de serviços de design de cutelaria do profissional Felipe. Site bilíngue (EN / PT-BR) com vitrine de trabalhos, pedidos de edição de facas com prazo automático e painel administrativo.
 
-## Estado atual
+## Project Status
+
+Backend MVP baseline validated. Quality gates: unit tests (56), integration tests against Supabase DEV (30), lint, typecheck, and production build — all passing.
+
+Current development focus: end-to-end validation of the customer/admin web experience.
+
+### Previous state
 
 Fundação técnica do MVP implementada: Next.js 15 bilíngue (`/en`, `/pt`), autenticação por magic link, schema PostgreSQL completo com RLS, motor de preço e de fila/prazo com testes, painel administrativo mínimo e build de produção passando (17 rotas). Pagamentos, upload de fotos e portfólio dinâmico ficam para as próximas etapas.
 
