@@ -107,14 +107,6 @@ jobs:
       - name: Build Next.js app
         run: npm run build
 
-      - name: Start Next.js server
-        run: |
-          npm start &
-          # Wait for server to be ready
-          npx wait-on http://localhost:3000 --timeout 60000
-        env:
-          PORT: 3000
-
       - name: Run E2E tests
         run: npm run test:e2e
 
