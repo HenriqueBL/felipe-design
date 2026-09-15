@@ -28,8 +28,9 @@ export function getAdminClient(): SupabaseClient<Database> {
  * Use this in cleanup/teardown to avoid state corruption from prior operations.
  */
 /**
- * Create a pure service-role client for cleanup/teardown.
+ * Create a pure service-role client for fixture setup/teardown and admin Auth API.
  * NEVER shares state with getAdminClient() or any user session.
+ * NEVER used for signInWithPassword — that must use the anon-key test-user client.
  * Explicitly disables all session management to prevent JWT contamination.
  */
 export function createFreshAdminClient(): SupabaseClient<Database> {
@@ -37,6 +38,27 @@ export function createFreshAdminClient(): SupabaseClient<Database> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error("E2E AUTH: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
+  return createClient<Database>(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+/**
+ * Create a test-user client using the ANON key (not service_role).
+ * Used exclusively for signInWithPassword to obtain user sessions for SSR cookies.
+ * This mirrors real application behavior and prevents conceptual contamination
+ * of the service-role client with user session state.
+ */
+export function createTestUserClient(): SupabaseClient<Database> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error("E2E AUTH: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
   return createClient<Database>(url, key, {
     auth: {
@@ -129,14 +151,15 @@ export async function deleteTestUser(userId: string): Promise<void> {
 
 /**
  * Sign in programmatically and return session tokens.
- * Uses a FRESH client to avoid contaminating the singleton getAdminClient()
- * with user JWT state. Each sign-in gets an isolated client instance.
+ * Uses the ANON-key test-user client (not service_role) to mirror real app behavior
+ * and prevent conceptual contamination of the service-role client.
+ * Each sign-in gets an isolated client instance with no session persistence.
  */
 export async function signInAsUser(
   email: string,
   password: string,
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  const client = createFreshAdminClient();
+  const client = createTestUserClient();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error || !data.session) {
     throw new Error(`E2E AUTH: Sign-in failed for ${email}: ${error?.message}`);
@@ -158,11 +181,10 @@ export async function signInAsUser(
  * 5. The /auth/callback route exchanges the code for a real session
  * 6. Redirect back to the intended destination with a valid session
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- password param kept for interface consistency with other auth helpers; magic link flow does not use it
 export async function authenticateBrowserPage(
   page: import("@playwright/test").Page,
   email: string,
-  _password: string,
+  _: string,
 ): Promise<void> {
   // Step 1: Go to login page
   await page.goto("/en/login");

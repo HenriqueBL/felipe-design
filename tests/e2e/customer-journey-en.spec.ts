@@ -1,8 +1,8 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
-import { getOrCreateTestPlan, cleanupUserData, tinyJpegBuffer } from "./helpers/fixtures";
+import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
 
 const FIXTURE_IMAGE = path.resolve(__dirname, "fixtures/tiny.jpg");
 

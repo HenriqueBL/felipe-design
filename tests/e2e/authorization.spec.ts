@@ -14,8 +14,8 @@ test.describe("Authorization & Access Control E2E", () => {
     customerB = await createTestUser("auth-b", "user");
     adminUser = await createTestUser("auth-admin", "admin");
 
-    // Create an order for Customer B to test cross-user access
-    const plan = await getOrCreateTestPlan();
+    // Ensure at least one active plan exists for checkout flows in other specs
+    await getOrCreateTestPlan();
 
     // We need to create an order for B programmatically or via UI.
     // For isolation and speed, we'll do it via UI in a setup step or use the journey pattern.
