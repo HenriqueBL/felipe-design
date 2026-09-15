@@ -15,6 +15,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1, // Single worker to serialize access to shared Supabase DEV
+  timeout: 60_000, // 60s per test — journeys involve multi-step flows with uploads/payments
   reporter: process.env.CI ? [["github"], ["html"]] : [["list"], ["html"]],
   use: {
     baseURL,
