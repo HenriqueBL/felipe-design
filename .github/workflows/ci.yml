@@ -71,13 +71,18 @@ jobs:
     name: E2E Tests (Playwright + Supabase DEV)
     runs-on: ubuntu-latest
     # Only run in trusted contexts — never on fork PRs (no secrets available).
-    # Gated by repository variable RUN_E2E_TESTS to allow opt-in during experimental phase.
+    # For push/workflow_dispatch: gated by RUN_E2E_TESTS variable.
+    # For internal PRs: always runs (fork protection is in the repo check below).
+    # Note: vars.* is not available in pull_request event context, so we cannot
+    # gate PRs on the variable. The repo-fullname check prevents fork execution.
     if: >-
-      vars.RUN_E2E_TESTS == 'true' &&
       (
-        github.event_name == 'push' ||
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        github.event_name == 'push' && vars.RUN_E2E_TESTS == 'true'
+      ) ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository
       )
     needs: quality
     env:
