@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
 import { accountPath, servicesPath } from "@/lib/paths";
+import { getCurrentUser } from "@/services/auth";
 import "../globals.css";
 
 export function generateStaticParams() {
@@ -47,6 +48,8 @@ export default async function LocaleLayout({
   const { locale } = await params;
   const current = resolveLocale(locale);
   const dictionary = await getDictionary(current);
+  // Fonte de verdade do header e a sessao real do Supabase (Server Component).
+  const user = await getCurrentUser();
 
   return (
     <html lang={current}>
@@ -59,7 +62,11 @@ export default async function LocaleLayout({
             <nav className="site-nav">
               <Link href={servicesPath(current)}>{dictionary.nav.services}</Link>
               <Link href={accountPath(current)}>{dictionary.nav.account}</Link>
-              <Link href={`/${current}/login`}>{dictionary.nav.login}</Link>
+              {user ? (
+                <Link href="/auth/signout">{dictionary.nav.logout}</Link>
+              ) : (
+                <Link href={`/${current}/login`}>{dictionary.nav.login}</Link>
+              )}
               <div className="locale-switch">
                 <Link href="/en" aria-label="English">
                   en

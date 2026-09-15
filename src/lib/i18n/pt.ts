@@ -32,6 +32,7 @@ const pt: Dictionary = {
     submit: "Enviar link mágico",
     success: "Verifique sua caixa de entrada. Enviamos um link de acesso.",
     error: "Não foi possível enviar o link. Tente novamente.",
+    rateLimited: "Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.",
   },
   services: {
     title: "Serviços",
@@ -65,6 +66,7 @@ const pt: Dictionary = {
     emailPlaceholder: "voce@exemplo.com",
     sendMagicLink: "Continuar com link mágico",
     magicLinkSent: "Verifique sua caixa de entrada",
+    magicLinkRateLimited: "Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.",
     magicLinkSentDescription: "Enviamos um link de acesso para seu e-mail. Suas escolhas ficam salvas e você volta aqui para confirmar o pedido.",
     createOrder: "Criar pedido",
     creating: "Criando...",

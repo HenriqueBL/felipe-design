@@ -169,7 +169,10 @@ test.describe("Error States & Edge Cases E2E", () => {
 
     // Should redirect to login or show access denied
     const url = page.url();
-    const content = await page.locator("body").textContent();
+    // innerText (not textContent): the Next dev-mode RSC payload inside
+    // <script> tags contains internal module paths (e.g. src/lib/supabase),
+    // which are not user-visible error output.
+    const content = await page.locator("body").innerText();
 
     // Must NOT expose internal errors
     expect(content).not.toMatch(/stack trace|PostgrestError|RLS|supabase/i);

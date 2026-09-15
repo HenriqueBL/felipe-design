@@ -30,6 +30,7 @@ const en = {
     submit: "Send magic link",
     success: "Check your inbox. We just sent you a sign-in link.",
     error: "We could not send the link. Please try again.",
+    rateLimited: "Too many sign-in attempts. Please wait a few minutes and try again.",
   },
   services: {
     title: "Services",
@@ -63,6 +64,7 @@ const en = {
     emailPlaceholder: "you@example.com",
     sendMagicLink: "Continue with magic link",
     magicLinkSent: "Check your inbox",
+    magicLinkRateLimited: "Too many sign-in attempts. Please wait a few minutes and try again.",
     magicLinkSentDescription: "We sent a sign-in link to your email. Your selections are saved and you will return here to confirm the order.",
     createOrder: "Create order",
     creating: "Creating...",
