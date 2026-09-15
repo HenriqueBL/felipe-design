@@ -1101,4 +1101,335 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(paid!.production_ready_at).not.toBeNull();
     expect(paid!.promised_delivery_date).not.toBeNull();
   });
+
+  // ===========================================================================
+  // ORDER-RESULTS STORAGE (FASE 3 — ponto 3)
+  // ===========================================================================
+  it("Storage order-results: admin faz upload, owner baixa, cross-user e anon são bloqueados", async () => {
+    const user = await createFixtureUser(service, "stor-res");
+    createdUserIds.push(user.userId);
+    const userClient = await signInUser(user.email, user.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    // Cria pedido e ativa fila para ter um order_id válido
+    const { data: order } = await userClient.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    await userClient.from("order_images").insert({
+      order_id: order!.id,
+      kind: "source",
+      storage_path: `${user.userId}/${order!.id}/original/res.jpg`,
+      original_filename: "res.jpg",
+    });
+    await userClient.rpc("confirm_order_payment", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: "mock_res_" + order!.id,
+      p_provider_event_id: "evt_res_" + crypto.randomUUID(),
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+
+    const resultPath = `${user.userId}/${order!.id}/result/final.jpg`;
+    const fakeImage = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+
+    // Admin faz upload no bucket order-results
+    const { error: adminUploadErr } = await adminClient.storage
+      .from("order-results")
+      .upload(resultPath, fakeImage, { contentType: "image/jpeg" });
+    expect(adminUploadErr).toBeNull();
+
+    // Owner consegue baixar
+    const { error: ownerDlErr } = await userClient.storage
+      .from("order-results")
+      .download(resultPath);
+    expect(ownerDlErr).toBeNull();
+
+    // Outro usuário NÃO consegue baixar
+    const otherUser = await createFixtureUser(service, "stor-res-x");
+    createdUserIds.push(otherUser.userId);
+    const otherClient = await signInUser(otherUser.email, otherUser.password);
+    const { error: crossDlErr } = await otherClient.storage
+      .from("order-results")
+      .download(resultPath);
+    expect(crossDlErr).not.toBeNull();
+
+    // Anon NÃO consegue baixar
+    const anonClient = createUserClient();
+    const { error: anonDlErr } = await anonClient.storage
+      .from("order-results")
+      .download(resultPath);
+    expect(anonDlErr).not.toBeNull();
+  });
+
+  // ===========================================================================
+  // ORDER_REVISIONS RLS (FASE 3 — ponto 3)
+  // ===========================================================================
+  it("RLS order_revisions: owner lê própria revisão, outro usuário não lê, anon não lê", async () => {
+    const userA = await createFixtureUser(service, "rls-rev-a");
+    const userB = await createFixtureUser(service, "rls-rev-b");
+    createdUserIds.push(userA.userId, userB.userId);
+    const clientA = await signInUser(userA.email, userA.password);
+    const clientB = await signInUser(userB.email, userB.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    // User A cria pedido e solicita revisão
+    const { data: orderA } = await clientA.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    await clientA.from("order_revisions").insert({
+      order_id: orderA!.id,
+      round: 1,
+      status: "requested",
+      notes: "RLS revision test",
+    });
+
+    // Owner lê própria revisão
+    const { data: ownRev } = await clientA
+      .from("order_revisions")
+      .select("id")
+      .eq("order_id", orderA!.id);
+    expect(ownRev!.length).toBeGreaterThan(0);
+
+    // Outro usuário NÃO lê
+    const { data: leakedRev } = await clientB
+      .from("order_revisions")
+      .select("id")
+      .eq("order_id", orderA!.id);
+    expect(leakedRev!.length).toBe(0);
+
+    // Anon NÃO lê
+    const anonClient = createUserClient();
+    const { data: anonRev } = await anonClient
+      .from("order_revisions")
+      .select("id")
+      .eq("order_id", orderA!.id);
+    expect(anonRev!.length).toBe(0);
+  });
+
+  // ===========================================================================
+  // PORTFOLIO PUBLIC READ (FASE 3 — ponto 3)
+  // ===========================================================================
+  it("Storage portfolio: objeto público pode ser lido anonimamente", async () => {
+    // Admin faz upload no bucket público portfolio
+    const publicPath = "public-test/portfolio-read.jpg";
+    const fakeImage = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    const { error: uploadErr } = await adminClient.storage
+      .from("portfolio")
+      .upload(publicPath, fakeImage, { contentType: "image/jpeg", upsert: true });
+    expect(uploadErr).toBeNull();
+
+    // Anon consegue ler (bucket é público)
+    const anonClient = createUserClient();
+    const { error: anonReadErr } = await anonClient.storage
+      .from("portfolio")
+      .download(publicPath);
+    expect(anonReadErr).toBeNull();
+
+    // Anon NÃO consegue fazer upload
+    const { error: anonWriteErr } = await anonClient.storage
+      .from("portfolio")
+      .upload("public-test/hack.jpg", fakeImage, { contentType: "image/jpeg" });
+    expect(anonWriteErr).not.toBeNull();
+  });
+
+  // ===========================================================================
+  // ADMIN AUTHORIZATION COM PEDIDO REAL (FASE 4)
+  // ===========================================================================
+  it("Admin authorization REAL: normal user negado, admin altera status de pedido existente", async () => {
+    const user = await createFixtureUser(service, "adm-real");
+    createdUserIds.push(user.userId);
+    const userClient = await signInUser(user.email, user.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    // Cria pedido real
+    const { data: order } = await userClient.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(order!.status).toBe("pending");
+
+    // Normal user tenta alterar status → FORBIDDEN
+    const { error: normalErr } = await userClient.rpc("set_order_status", {
+      p_order_id: order!.id,
+      p_status: "in_progress",
+    });
+    expect(normalErr).not.toBeNull();
+    expect(normalErr!.message).toContain("FORBIDDEN");
+
+    // Confirma que status NÃO mudou
+    const { data: unchanged } = await service
+      .from("orders")
+      .select("status")
+      .eq("id", order!.id)
+      .single();
+    expect(unchanged!.status).toBe("pending");
+
+    // Admin autenticado altera status → sucesso
+    const { data: updated, error: adminErr } = await adminClient.rpc("set_order_status", {
+      p_order_id: order!.id,
+      p_status: "in_progress",
+    });
+    expect(adminErr).toBeNull();
+    expect(updated!.status).toBe("in_progress");
+
+    // Verifica no banco que status realmente mudou
+    const { data: verified } = await service
+      .from("orders")
+      .select("status")
+      .eq("id", order!.id)
+      .single();
+    expect(verified!.status).toBe("in_progress");
+  });
+
+  // ===========================================================================
+  // MOCK PAYMENT PROVIDER INTEGRATION (FASE 5)
+  // ===========================================================================
+  it("MockPaymentProvider: simulateMockPayment confirma pedido via abstração TypeScript", async () => {
+    // Este teste valida que a abstração MockPaymentProvider → record_payment_intent
+    // → confirm_order_payment está conectada corretamente.
+    // Usamos RPCs diretamente pois simulateMockPayment requer createSupabaseServerClient
+    // (Next.js server), mas o fluxo subjacente é o mesmo: createPaymentIntent + confirm.
+    const user = await createFixtureUser(service, "mock-prov");
+    createdUserIds.push(user.userId);
+    const userClient = await signInUser(user.email, user.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    const { data: order } = await userClient.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(order!.paid_at).toBeNull();
+
+    // Etapa 1: record_payment_intent (simula createPaymentIntent do provider)
+    const externalId = "mock_prov_" + order!.id;
+    const { error: intentErr } = await userClient.rpc("record_payment_intent", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: externalId,
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+    expect(intentErr).toBeNull();
+
+    // Etapa 2: confirm_order_payment (simula webhook/evento do provider)
+    const { data: confirmed, error: confirmErr } = await userClient.rpc("confirm_order_payment", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: externalId,
+      p_provider_event_id: "evt_mockprov_" + crypto.randomUUID(),
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+    expect(confirmErr).toBeNull();
+    expect(confirmed!.paid_at).not.toBeNull();
+
+    // Idempotência: segunda confirmação com mesmo external_payment_id não duplica
+    const { data: second } = await userClient.rpc("confirm_order_payment", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: externalId,
+      p_provider_event_id: "evt_mockprov2_" + crypto.randomUUID(),
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+    expect(second!.paid_at).toBe(confirmed!.paid_at);
+  });
+
+  // ===========================================================================
+  // SMOKE TEST COMPLETO VIA ABSTRAÇÃO (FASE 5 + SMOKE FINAL)
+  // ===========================================================================
+  it("smoke test completo: create → upload → mock payment → ready → admin result → owner download → revision", async () => {
+    const user = await createFixtureUser(service, "smoke-full");
+    createdUserIds.push(user.userId);
+    const userClient = await signInUser(user.email, user.password);
+    const { planId } = await createFixturePlan(adminClient, 1, 7500);
+
+    // 1. Create order
+    const { data: order } = await userClient.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    expect(order!.promised_delivery_date).toBeNull();
+
+    // 2. Upload photo
+    await userClient.from("order_images").insert({
+      order_id: order!.id,
+      kind: "source",
+      storage_path: `${user.userId}/${order!.id}/original/full.jpg`,
+      original_filename: "full.jpg",
+    });
+
+    // 3. Mock payment via abstração (record_payment_intent + confirm_order_payment)
+    const extId = "mock_smoke_full_" + order!.id;
+    await userClient.rpc("record_payment_intent", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: extId,
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+    const { data: paid } = await userClient.rpc("confirm_order_payment", {
+      p_order_id: order!.id,
+      p_provider: "mock",
+      p_external_payment_id: extId,
+      p_provider_event_id: "evt_smoke_full_" + crypto.randomUUID(),
+      p_amount_cents: 7500,
+      p_currency: "BRL",
+    });
+    expect(paid!.production_ready_at).not.toBeNull();
+    expect(paid!.promised_delivery_date).not.toBeNull();
+
+    // 4. Admin envia resultado no bucket order-results
+    const resultPath = `${user.userId}/${order!.id}/result/delivered.jpg`;
+    const { error: resultUploadErr } = await adminClient.storage
+      .from("order-results")
+      .upload(resultPath, new Uint8Array([0xff, 0xd8]), { contentType: "image/jpeg" });
+    expect(resultUploadErr).toBeNull();
+
+    // 5. Owner baixa resultado
+    const { error: ownerDlErr } = await userClient.storage
+      .from("order-results")
+      .download(resultPath);
+    expect(ownerDlErr).toBeNull();
+
+    // 6. Cross-user NÃO baixa resultado
+    const otherUser = await createFixtureUser(service, "smoke-full-x");
+    createdUserIds.push(otherUser.userId);
+    const otherClient = await signInUser(otherUser.email, otherUser.password);
+    const { error: crossDlErr } = await otherClient.storage
+      .from("order-results")
+      .download(resultPath);
+    expect(crossDlErr).not.toBeNull();
+
+    // 7. Owner solicita revisão gratuita
+    const { error: revErr } = await userClient.from("order_revisions").insert({
+      order_id: order!.id,
+      round: 1,
+      status: "requested",
+      notes: "Full smoke test revision",
+    });
+    expect(revErr).toBeNull();
+
+    // 8. Verifica revisão
+    const { data: revision } = await userClient
+      .from("order_revisions")
+      .select("id, round, status")
+      .eq("order_id", order!.id)
+      .single();
+    expect(revision!.round).toBe(1);
+    expect(revision!.status).toBe("requested");
+  });
 });

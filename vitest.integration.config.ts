@@ -3,7 +3,7 @@ import path from "node:path";
 import { config } from "dotenv";
 
 // Load .env.test.local before Vitest reads process.env
-config({ path: path.resolve(__dirname, ".env.test.local") });
+config({ path: path.resolve(__dirname, ".env.test.local"), override: true });
 
 export default defineConfig({
   test: {
