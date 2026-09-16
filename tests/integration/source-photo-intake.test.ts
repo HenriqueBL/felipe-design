@@ -150,9 +150,9 @@ describe("Source Photo Intake (migration 0008)", () => {
     knifeQty: number,
     planAngles = 1,
   ): Promise<{ user: FixtureUser; client: SupabaseClient; orderId: string }> {
-    const user = await createFixtureUser(service, prefix);
-    createdUserIds.push(user.userId);
-    const client = await signInUser(user.email, user.password);
+    // All owner scenarios share ONE signed-in customer; isolation is
+    // per-order (unique idempotency keys and storage paths), not per-user.
+    const { user, client } = await getIdentity("spi-customer");
     const planId = await createFixturePlan(adminClient, planAngles);
     const { data: order, error } = await client.rpc("create_order", {
       p_plan_id: planId,
@@ -225,12 +225,34 @@ describe("Source Photo Intake (migration 0008)", () => {
     return data as unknown as OrderSnapshot;
   }
 
+  // ONE SIGN-IN PER IDENTITY PER FILE: rate limit on Supabase auth.
+  // Business state (orders, idempotency keys, photos) stays per-test.
+  const identityCache = new Map<
+    string,
+    { user: FixtureUser; client: SupabaseClient }
+  >();
+  async function getIdentity(prefix: string) {
+    let cached = identityCache.get(prefix);
+    if (!cached) {
+      const user = await createFixtureUser(service, prefix);
+      createdUserIds.push(user.userId);
+      cached = {
+        user,
+        client: await signInUser(user.email, user.password),
+      };
+      identityCache.set(prefix, cached);
+    }
+    return cached;
+  }
+
   beforeAll(async () => {
     service = createServiceClient();
     adminFixture = await createFixtureUser(service, "spi-admin");
     createdUserIds.push(adminFixture.userId);
     await promoteToAdmin(service, adminFixture.userId);
     adminClient = await signInUser(adminFixture.email, adminFixture.password);
+    // Warm the shared customer identity once.
+    await getIdentity("spi-customer");
   });
 
   afterAll(async () => {
@@ -518,11 +540,9 @@ describe("Source Photo Intake (migration 0008)", () => {
     const { user, client, orderId } = await setupOrder("crossdel", 1);
     const registered = await register(client, orderId, user.userId, 1, 3);
 
-    const intruder = await createFixtureUser(service, "crossdel-b");
-    createdUserIds.push(intruder.userId);
-    const intruderClient = await signInUser(intruder.email, intruder.password);
+    const intruder = await getIdentity("crossdel-b");
 
-    const { error } = await intruderClient.rpc("delete_source_image", {
+    const { error } = await intruder.client.rpc("delete_source_image", {
       p_image_id: registered[0]!.data!.id,
     });
     expect(error).toBeTruthy();
@@ -619,11 +639,9 @@ describe("Source Photo Intake (migration 0008)", () => {
     const { user, client, orderId } = await setupOrder("crossdel", 1);
     const registered = await register(client, orderId, user.userId, 1, 3);
 
-    const intruder = await createFixtureUser(service, "crossdel-b");
-    createdUserIds.push(intruder.userId);
-    const intruderClient = await signInUser(intruder.email, intruder.password);
+    const intruder = await getIdentity("crossdel-b");
 
-    const { error } = await intruderClient.rpc("delete_source_image", {
+    const { error } = await intruder.client.rpc("delete_source_image", {
       p_image_id: registered[0]!.data!.id,
     });
     expect(error).toBeTruthy();

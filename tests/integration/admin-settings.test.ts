@@ -87,6 +87,24 @@ async function createOrder(client: SupabaseClient, planId: string): Promise<stri
 const ORIGINAL = { min: 3, max: 5, size: 25 };
 const UPDATED = { min: 4, max: 7, size: 30 };
 
+// ONE SIGN-IN PER IDENTITY PER FILE: rate limit on Supabase auth.
+interface FixtureUser {
+  userId: string;
+  email: string;
+  password: string;
+}
+const identityCache = new Map<string, { user: FixtureUser; client: SupabaseClient }>();
+async function getIdentity(prefix: string) {
+  let cached = identityCache.get(prefix);
+  if (!cached) {
+    const user = await createFixtureUser(prefix);
+    createdUserIds.push(user.userId);
+    cached = { user, client: await signInUser(user.email, user.password) };
+    identityCache.set(prefix, cached);
+  }
+  return cached;
+}
+
 beforeAll(async () => {
   // update_app_settings checks is_admin() on the caller — sign in as a
   // promoted admin user (service_role gets FORBIDDEN).
@@ -157,8 +175,7 @@ describe("admin settings — source photo policy (snapshot)", () => {
   });
 
   it("new order created AFTER the settings change snapshots the NEW values", async () => {
-    const user = await createFixtureUser("admset");
-    const client = await signInUser(user.email, user.password);
+    const { user, client } = await getIdentity("admset");
     const planId = await createFixturePlan();
     const orderId = await createOrder(client, planId);
 

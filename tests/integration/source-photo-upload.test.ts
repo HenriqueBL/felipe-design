@@ -175,13 +175,30 @@ describe("Source photo upload flow (Phase A/B + cleanup)", () => {
   let adminClient: SupabaseClient;
   const createdUserIds: string[] = [];
 
+  // ONE SIGN-IN PER IDENTITY PER FILE: rate limit on Supabase auth.
+  // Business state (orders, storage paths) stays per-test.
+  const identityCache = new Map<
+    string,
+    { user: FixtureUser; client: SupabaseClient }
+  >();
+  async function getIdentity(prefix: string) {
+    let cached = identityCache.get(prefix);
+    if (!cached) {
+      const user = await createFixtureUser(service, prefix);
+      createdUserIds.push(user.userId);
+      cached = { user, client: await signInUser(user.email, user.password) };
+      identityCache.set(prefix, cached);
+    }
+    return cached;
+  }
+
   async function setupOrder(
-    prefix: string,
+    _prefix: string,
     knifeQty = 1,
   ): Promise<{ user: FixtureUser; client: SupabaseClient; orderId: string }> {
-    const user = await createFixtureUser(service, prefix);
-    createdUserIds.push(user.userId);
-    const client = await signInUser(user.email, user.password);
+    // Owner scenarios share ONE signed-in customer; isolation is per-order
+    // (unique idempotency keys and storage paths), not per-user.
+    const { user, client } = await getIdentity("upl-customer");
     const planId = await createFixturePlan(adminClient, 1);
     const { data: order, error } = await client.rpc("create_order", {
       p_plan_id: planId,
@@ -516,12 +533,10 @@ describe("Source photo upload flow (Phase A/B + cleanup)", () => {
       originalFilename: "mine.jpg",
     });
 
-    const intruder = await createFixtureUser(service, "cross-fin-b");
-    createdUserIds.push(intruder.userId);
-    const intruderClient = await signInUser(intruder.email, intruder.password);
+    const intruder = await getIdentity("cross-fin-b");
 
     await expect(
-      finalizeSourcePhotoUploadWithClient(intruderClient, {
+      finalizeSourcePhotoUploadWithClient(intruder.client, {
         orderId,
         knifeIndex: 1,
         storagePath: auth.storagePath,
