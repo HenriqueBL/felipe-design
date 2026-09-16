@@ -243,6 +243,42 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   let adminClient: SupabaseClient;
   const createdUserIds: string[] = [];
 
+  // ONE SIGN-IN PER IDENTITY PER FILE: rate limit on Supabase auth.
+  // Business state (orders, payments, storage paths) stays per-test.
+  const identityCache = new Map<
+    string,
+    { user: FixtureUser; client: SupabaseClient }
+  >();
+  async function getIdentity(prefix: string) {
+    let cached = identityCache.get(prefix);
+    if (!cached) {
+      const user = await createFixtureUser(service, prefix);
+      createdUserIds.push(user.userId);
+      cached = { user, client: await signInUser(user.email, user.password) };
+      identityCache.set(prefix, cached);
+    }
+    return cached;
+  }
+
+  // Registra n source photos para uma faca via RPC autoritativa (0008+0010).
+  async function registerSource(
+    client: SupabaseClient,
+    orderId: string,
+    userId: string,
+    knifeIndex: number,
+    n: number,
+  ): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      const { error } = await client.rpc("register_source_image", {
+        p_order_id: orderId,
+        p_knife_index: knifeIndex,
+        p_storage_path: `${userId}/${orderId}/knife-${knifeIndex}/${crypto.randomUUID()}.jpg`,
+        p_original_filename: `photo_${knifeIndex}_${i}.jpg`,
+      });
+      if (error) throw new Error(`register_source_image failed: ${error.message}`);
+    }
+  }
+
   beforeAll(async () => {
     service = createServiceClient();
 
@@ -271,9 +307,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("create_order grava promised_delivery_date como NULL", async () => {
-    const user = await createFixtureUser(service, "core-null");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order, error } = await userClient.rpc("create_order", {
@@ -291,9 +325,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("confirm_order_payment sem fotos completas mantém promised_delivery_date NULL", async () => {
-    const user = await createFixtureUser(service, "pay-nofoto");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 2, 13000);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -318,9 +350,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("upload completo após pagamento ativa fila e fixa promised_delivery_date", async () => {
-    const user = await createFixtureUser(service, "pay-upload");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -340,13 +370,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
     });
 
-    // Partial upload — should NOT activate
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/t1.jpg`,
-      original_filename: "t1.jpg",
-    });
+    // Partial upload — should NOT activate (knife 2 below minimum, no submit)
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
 
     const { data: partial } = await userClient
       .from("orders")
@@ -356,13 +381,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(partial!.production_ready_at).toBeNull();
     expect(partial!.promised_delivery_date).toBeNull();
 
-    // Final upload — trigger activates queue
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/t2.jpg`,
-      original_filename: "t2.jpg",
-    });
+    // Final upload + explicit submit — activates queue
+    await registerSource(userClient, order!.id, user.userId, 2, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: complete } = await userClient
       .from("orders")
@@ -374,9 +395,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("fotos completas antes do pagamento ativam fila na confirmação", async () => {
-    const user = await createFixtureUser(service, "foto-pay");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -387,12 +406,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
 
     // Upload BEFORE payment
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/photo.jpg`,
-      original_filename: "photo.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: beforePay } = await userClient
       .from("orders")
@@ -417,9 +432,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("idempotência: segunda confirmação não altera production_ready_at nem prazo", async () => {
-    const user = await createFixtureUser(service, "idem");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -429,12 +442,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/idem.jpg`,
-      original_filename: "idem.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: first } = await userClient.rpc("confirm_order_payment", {
       p_order_id: order!.id,
@@ -480,12 +489,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("concorrência: dois pedidos ficam ready simultaneamente com Promise.all", async () => {
-    const userA = await createFixtureUser(service, "conc-a");
-    const userB = await createFixtureUser(service, "conc-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
 
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
@@ -503,19 +512,11 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    // Upload photos for both
-    await clientA.from("order_images").insert({
-      order_id: orderA!.id,
-      kind: "source",
-      storage_path: `${userA.userId}/${orderA!.id}/original/conc.jpg`,
-      original_filename: "conc.jpg",
-    });
-    await clientB.from("order_images").insert({
-      order_id: orderB!.id,
-      kind: "source",
-      storage_path: `${userB.userId}/${orderB!.id}/original/conc.jpg`,
-      original_filename: "conc.jpg",
-    });
+    // Upload photos + submit for both
+    await registerSource(clientA, orderA!.id, userA.userId, 1, 3);
+    await clientA.rpc("submit_source_photos", { p_order_id: orderA!.id });
+    await registerSource(clientB, orderB!.id, userB.userId, 1, 3);
+    await clientB.rpc("submit_source_photos", { p_order_id: orderB!.id });
 
     // Confirm payment CONCURRENTLY — both should activate without race
     const [resultA, resultB] = await Promise.all([
@@ -549,9 +550,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("concorrência: mesmo pedido recebe pagamento e upload simultâneos", async () => {
-    const user = await createFixtureUser(service, "conc-same");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -571,12 +570,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
         p_amount_cents: 7500,
         p_currency: "BRL",
       }),
-      userClient.from("order_images").insert({
-        order_id: order!.id,
-        kind: "source",
-        storage_path: `${user.userId}/${order!.id}/original/same.jpg`,
-        original_filename: "same.jpg",
-      }),
+      registerSource(userClient, order!.id, user.userId, 1, 3).then(() =>
+        userClient.rpc("submit_source_photos", { p_order_id: order!.id }),
+      ),
     ]);
 
     // Regardless of which completed first, final state must be consistent
@@ -594,9 +590,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("concorrência: chamadas duplicadas de maybe_mark_order_ready são idempotentes", async () => {
-    const user = await createFixtureUser(service, "conc-dup");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -606,13 +600,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    // Upload photo first
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/dup.jpg`,
-      original_filename: "dup.jpg",
-    });
+    // Upload photos + submit first
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // Fire two concurrent payment confirmations (same external_payment_id)
     const [first, second] = await Promise.all([
@@ -650,12 +640,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("RLS orders: owner lê próprio pedido, outro usuário não lê", async () => {
-    const userA = await createFixtureUser(service, "rls-ord-a");
-    const userB = await createFixtureUser(service, "rls-ord-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: orderA } = await clientA.rpc("create_order", {
@@ -683,12 +673,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("RLS order_images: owner lê próprias imagens, outro usuário não", async () => {
-    const userA = await createFixtureUser(service, "rls-img-a");
-    const userB = await createFixtureUser(service, "rls-img-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: orderA } = await clientA.rpc("create_order", {
@@ -698,12 +688,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    await clientA.from("order_images").insert({
-      order_id: orderA!.id,
-      kind: "source",
-      storage_path: `${userA.userId}/${orderA!.id}/original/rls.jpg`,
-      original_filename: "rls.jpg",
-    });
+    await registerSource(clientA, orderA!.id, userA.userId, 1, 3);
 
     // Owner reads own images
     const { data: ownImages } = await clientA
@@ -721,12 +706,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("RLS payments: owner lê próprios pagamentos, outro usuário não", async () => {
-    const userA = await createFixtureUser(service, "rls-pay-a");
-    const userB = await createFixtureUser(service, "rls-pay-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: orderA } = await clientA.rpc("create_order", {
@@ -761,12 +746,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("RLS profiles: usuário lê próprio perfil, não lê de outros", async () => {
-    const userA = await createFixtureUser(service, "rls-prof-a");
-    const userB = await createFixtureUser(service, "rls-prof-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
 
     // A reads own profile
     const { data: ownProfile } = await clientA
@@ -787,11 +772,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
   it("RLS anon: usuário não autenticado não acessa dados privados", async () => {
     const anonClient = createUserClient(); // No sign-in = anonymous
-    const user = await createFixtureUser(service, "rls-anon");
-    createdUserIds.push(user.userId);
-
-    // Create an order via authenticated client first
-    const authClient = await signInUser(user.email, user.password);
+    const { user, client: authClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
     const { data: order } = await authClient.rpc("create_order", {
       p_plan_id: planId,
@@ -822,12 +803,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("Storage client-uploads: owner faz upload, outro usuário é bloqueado", async () => {
-    const userA = await createFixtureUser(service, "stor-a");
-    const userB = await createFixtureUser(service, "stor-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
 
     // Owner uploads to own path
     const { error: ownError } = await clientA.storage
@@ -851,12 +832,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("Storage client-uploads: outro usuário não baixa arquivo do owner", async () => {
-    const userA = await createFixtureUser(service, "stor-dl-a");
-    const userB = await createFixtureUser(service, "stor-dl-b");
-    createdUserIds.push(userA.userId, userB.userId);
-
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
 
     // Owner uploads
     await clientA.storage
@@ -882,8 +863,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
   it("Storage client-uploads: anon não acessa bucket privado", async () => {
     const anonClient = createUserClient();
-    const user = await createFixtureUser(service, "stor-anon");
-    createdUserIds.push(user.userId);
+    const { user } = await getIdentity("pr-customer");
 
     const { error } = await anonClient.storage
       .from("client-uploads")
@@ -900,11 +880,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("Admin authorization: usuário normal é bloqueado em RPC administrativa", async () => {
-    const normalUser = await createFixtureUser(service, "noadmin");
-    createdUserIds.push(normalUser.userId);
-    const normalClient = await signInUser(
-      normalUser.email,
-      normalUser.password,
+    const { user: normalUser, client: normalClient } = await getIdentity(
+      "pr-other",
     );
 
     // Try to call set_order_status (admin-only RPC)
@@ -933,9 +910,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("Admin authorization: admin lê todos os pedidos, usuário normal só os próprios", async () => {
-    const user = await createFixtureUser(service, "adm-read");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // User creates an order
@@ -971,9 +946,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ===========================================================================
 
   it("smoke test: fluxo completo payment-first com revisão", async () => {
-    const user = await createFixtureUser(service, "smoke-pf");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // 1. Create order
@@ -1005,13 +978,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(paid!.paid_at).not.toBeNull();
     expect(paid!.production_ready_at).toBeNull();
 
-    // 4. Upload photo
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/smoke.jpg`,
-      original_filename: "smoke.jpg",
-    });
+    // 4. Upload photos + submit
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // 5. Verify activation
     const { data: activated } = await userClient
@@ -1060,9 +1029,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   });
 
   it("smoke test: fluxo completo photos-first", async () => {
-    const user = await createFixtureUser(service, "smoke-fp");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // 1. Create order
@@ -1074,13 +1041,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
     expect(order!.promised_delivery_date).toBeNull();
 
-    // 2. Upload photo BEFORE payment
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/fp.jpg`,
-      original_filename: "fp.jpg",
-    });
+    // 2. Upload photos + submit BEFORE payment
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // Not activated yet (no payment)
     const { data: beforePay } = await userClient
@@ -1108,9 +1071,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ORDER-RESULTS STORAGE (FASE 3 — ponto 3)
   // ===========================================================================
   it("Storage order-results: admin faz upload, owner baixa, cross-user e anon são bloqueados", async () => {
-    const user = await createFixtureUser(service, "stor-res");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // Cria pedido e ativa fila para ter um order_id válido
@@ -1120,12 +1081,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
     });
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/res.jpg`,
-      original_filename: "res.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
     await userClient.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
@@ -1151,9 +1108,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(ownerDlErr).toBeNull();
 
     // Outro usuário NÃO consegue baixar
-    const otherUser = await createFixtureUser(service, "stor-res-x");
-    createdUserIds.push(otherUser.userId);
-    const otherClient = await signInUser(otherUser.email, otherUser.password);
+    const { user: otherUser, client: otherClient } = await getIdentity(
+      "pr-other",
+    )
     const { error: crossDlErr } = await otherClient.storage
       .from("order-results")
       .download(resultPath);
@@ -1171,11 +1128,12 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ORDER_REVISIONS RLS (FASE 3 — ponto 3)
   // ===========================================================================
   it("RLS order_revisions: owner lê própria revisão, outro usuário não lê, anon não lê", async () => {
-    const userA = await createFixtureUser(service, "rls-rev-a");
-    const userB = await createFixtureUser(service, "rls-rev-b");
-    createdUserIds.push(userA.userId, userB.userId);
-    const clientA = await signInUser(userA.email, userA.password);
-    const clientB = await signInUser(userB.email, userB.password);
+    const a = await getIdentity("pr-customer");
+    const b = await getIdentity("pr-other");
+    const userA = a.user;
+    const clientA = a.client;
+    const userB = b.user;
+    const clientB = b.client;
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // User A cria pedido e solicita revisão
@@ -1245,9 +1203,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // ADMIN AUTHORIZATION COM PEDIDO REAL (FASE 4)
   // ===========================================================================
   it("Admin authorization REAL: normal user negado, admin altera status de pedido existente", async () => {
-    const user = await createFixtureUser(service, "adm-real");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // Cria pedido real
@@ -1300,9 +1256,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     // → confirm_order_payment está conectada corretamente.
     // Usamos RPCs diretamente pois simulateMockPayment requer createSupabaseServerClient
     // (Next.js server), mas o fluxo subjacente é o mesmo: createPaymentIntent + confirm.
-    const user = await createFixtureUser(service, "mock-prov");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -1356,9 +1310,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     // server-side, não apenas que as RPCs individuais funcionam.
     // Mockamos createSupabaseServerClient para retornar um client autenticado
     // como usuário fixture, permitindo invocar simulateMockPayment sem Next.js runtime.
-    const user = await createFixtureUser(service, "mock-abs");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     const { data: order } = await userClient.rpc("create_order", {
@@ -1405,9 +1357,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   // SMOKE TEST COMPLETO VIA ABSTRAÇÃO (FASE 5 + SMOKE FINAL)
   // ===========================================================================
   it("smoke test completo: create → upload → mock payment → ready → admin result → owner download → revision", async () => {
-    const user = await createFixtureUser(service, "smoke-full");
-    createdUserIds.push(user.userId);
-    const userClient = await signInUser(user.email, user.password);
+    const { user, client: userClient } = await getIdentity("pr-customer");
     const { planId } = await createFixturePlan(adminClient, 1, 7500);
 
     // 1. Create order
@@ -1419,13 +1369,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
     expect(order!.promised_delivery_date).toBeNull();
 
-    // 2. Upload photo
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/full.jpg`,
-      original_filename: "full.jpg",
-    });
+    // 2. Upload photos + submit
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // 3. Mock payment via abstração (record_payment_intent + confirm_order_payment)
     const extId = "mock_smoke_full_" + order!.id;
@@ -1461,9 +1407,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(ownerDlErr).toBeNull();
 
     // 6. Cross-user NÃO baixa resultado
-    const otherUser = await createFixtureUser(service, "smoke-full-x");
-    createdUserIds.push(otherUser.userId);
-    const otherClient = await signInUser(otherUser.email, otherUser.password);
+    const { user: otherUser, client: otherClient } = await getIdentity(
+      "pr-other",
+    )
     const { error: crossDlErr } = await otherClient.storage
       .from("order-results")
       .download(resultPath);

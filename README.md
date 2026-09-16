@@ -25,6 +25,7 @@ Fundação técnica do MVP implementada: Next.js 15 bilíngue (`/en`, `/pt`), au
 - Planos de 1, 2 ou 3 ângulos por faca, com preços BRL/USD geridos pelo painel (sem hardcode; pedidos antigos preservam o preço praticado).
 - Prazo de entrega automático em dias úteis (capacidade 4 edições/dia, horário de corte e timezone configuráveis), exibido antes e depois da compra.
 - Guia de envio de fotos liberado após o pagamento e área de upload para o cliente.
+- Intake de source photos (input do cliente) com envio direto Browser → Supabase Storage via TUS, agrupamento por faca, mínimos/máximos por faca e finalização explícita ("Finish photo submission"). O upload aceita tanto fotos antes quanto depois do pagamento; o pedido só entra na fila com pagamento confirmado **e** intake finalizado.
 - Estados do pedido: Pendente, Em andamento, Concluído; 1 rodada de revisão gratuita.
 - Pagamentos planejados com Stripe (cartão internacional), Mercado Pago (PIX/cartão) e NowPayments (cripto).
 - Sistema de afiliados com código exclusivo, comissão registrada e percentual configurável.
@@ -41,7 +42,7 @@ cp .env.example .env   # preencha as variáveis do Supabase
 npm run dev
 ```
 
-Verificações: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Migrations em `supabase/migrations` (aplicar na ordem 0001-0004).
+Verificações: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Migrations em `supabase/migrations` (aplicar na ordem 0001-0011). E2E: `npm run test:e2e`; integração: `npm run test:integration`.
 
 ## Como contribuir
 

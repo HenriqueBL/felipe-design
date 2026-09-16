@@ -2,12 +2,19 @@
 
 > Regra de negócio crítica do sistema. Implementada em SQL (`maybe_mark_order_ready`, `create_order`, `estimate_delivery`) como autoridade definitiva, e em TypeScript (`src/services/queue.ts`) apenas para estimativa comercial pré-compra.
 
-## Regra oficial (v2 — migration 0006)
+## Regra oficial (v3 — migrations 0008–0011)
 
 O prazo definitivo de produção (`promised_delivery_date`) só é calculado e fixado quando o pedido atinge **ready_for_production**, ou seja:
 
 1. pagamento confirmado (`paid_at IS NOT NULL`); **e**
-2. todas as fotos obrigatórias enviadas (`source_image_count >= total_images`).
+2. intake de source photos finalizado explicitamente pelo cliente (`source_photos_submitted_at IS NOT NULL`, via RPC `submit_source_photos`); **e**
+3. cada faca (`knife_index` 1..`knife_quantity`) possui no mínimo `required_source_photos_per_knife` source photos.
+
+Importante: source photos são **INPUT** (material do cliente); `total_images` continua sendo a unidade de workload **OUTPUT** (entregáveis). A condição antiga `source_image_count >= total_images` (v2) foi removida — misturava input e output.
+
+Chegar ao mínimo por faca **não** fecha o intake automaticamente. O cliente precisa clicar **Finish photo submission** (`submit_source_photos`). Depois disso o intake fica read-only (freeze: novos uploads/registers são rejeitados com `INTAKE_CLOSED`). Ambas as ordens de eventos são suportadas: payment → photos → submit, e photos → submit → payment.
+
+A política de upload (min/max por faca, tamanho máximo) é **snapshotada no momento da criação do pedido** (`create_order` copia de `app_settings` para `orders`). Mudanças nos settings admin afetam somente pedidos novos.
 
 Antes disso, `promised_delivery_date` permanece `NULL` e o pedido **não consome capacidade real da fila**. A estimativa comercial exibida antes da compra é apenas informativa e não constitui promessa.
 
@@ -38,8 +45,8 @@ A função `maybe_mark_order_ready(order_id)` é idempotente e atomiza a transi�
 5. Impede recálculo posterior (guarda por `production_ready_at IS NULL`).
 
 É chamada automaticamente em dois momentos:
-- **Trigger `order_images_try_activate`**: após insert/delete em `order_images` (quando upload completa as fotos).
-- **RPC `confirm_order_payment`**: imediatamente após gravar `paid_at` (caso fotos já estivessem completas antes do pagamento).
+- **RPC `submit_source_photos`**: imediatamente após gravar `source_photos_submitted_at` (caso pagamento já tenha ocorrido).
+- **RPC `confirm_order_payment`**: imediatamente após gravar `paid_at` (caso o intake já estivesse finalizado antes do pagamento).
 
 A ordem dos eventos (pagamento antes/depois das fotos) não importa; a ativação ocorre exatamente uma vez.
 

@@ -107,8 +107,9 @@ test.describe("Error States & Edge Cases E2E", () => {
     if (await uploadInput.isVisible({ timeout: 5000 }).catch(() => false)) {
       await uploadInput.setInputFiles(INVALID_FILE_PATH);
 
-      // Wait for error feedback
-      const errorMsg = page.locator('.error, .form-status.error, [role="alert"]');
+      // Wait for error feedback (scoped to main: Next's route announcer
+      // is also role="alert" and would trip strict mode)
+      const errorMsg = page.locator('main .error, main [role="alert"]');
       await expect(errorMsg).toBeVisible({ timeout: 10000 });
 
       const errorText = await errorMsg.textContent();

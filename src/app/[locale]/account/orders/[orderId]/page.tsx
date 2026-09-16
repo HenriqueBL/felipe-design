@@ -17,7 +17,7 @@ import {
 } from "@/domain/checkout";
 import { accountPath } from "@/lib/paths";
 import OrderSteps from "@/components/account/order-steps";
-import UploadArea from "@/components/account/upload-area";
+import SourcePhotoUploadArea from "@/components/account/source-photo-upload-area";
 import MockPaymentForm from "@/components/account/mock-payment-form";
 import RevisionForm from "@/components/account/revision-form";
 
@@ -98,12 +98,18 @@ export default async function CustomerOrderPage({
     resultImages.length > 0,
   );
 
+  // Source photos: thumbnails via signed URL (bucket privado client-uploads).
+  const sourcePhotoItems = await Promise.all(
+    sourceImages.map(async (image) => ({
+      id: image.id,
+      knifeIndex: image.knife_index ?? 1,
+      filename: image.original_filename ?? image.storage_path.split("/").pop() ?? image.id,
+      url: await createSignedDownloadUrl("client-uploads", image.storage_path),
+    })),
+  );
+
   const shortId = order.id.slice(0, 8).toUpperCase();
-  const showUpload =
-    order.paid_at !== null &&
-    sourceImages.length < order.total_images &&
-    order.status !== "cancelled" &&
-    order.status !== "completed";
+  const showUpload = order.status !== "cancelled" && order.status !== "completed";
 
   return (
     <main className="order-detail">
@@ -194,23 +200,15 @@ export default async function CustomerOrderPage({
 
       {showUpload ? (
         <section className="auth-panel">
-          <UploadArea
+          <SourcePhotoUploadArea
             orderId={order.id}
-            userId={order.user_id}
-            expectedCount={order.total_images}
-            currentCount={sourceImages.length}
-            labels={{
-              title: dictionary.order.uploadTitle,
-              description: dictionary.order.uploadDescription,
-              choose: dictionary.order.uploadChoose,
-              uploadedCount: dictionary.order.uploadedCount,
-              done: dictionary.order.uploadDone,
-              errorExtension: dictionary.order.uploadErrorExtension,
-              errorMime: dictionary.order.uploadErrorMime,
-              errorSize: dictionary.order.uploadErrorSize,
-              errorTooMany: dictionary.order.uploadErrorTooMany,
-              error: dictionary.order.uploadError,
-            }}
+            locale={current}
+            submitted={order.source_photos_submitted_at !== null}
+            knifeQuantity={order.knife_quantity}
+            requiredPerKnife={order.required_source_photos_per_knife}
+            maxPerKnife={order.max_source_photos_per_knife}
+            maxPhotoSizeMb={order.max_source_photo_size_mb}
+            images={sourcePhotoItems}
           />
         </section>
       ) : null}

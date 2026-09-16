@@ -136,6 +136,43 @@ const en = {
     revisionRequested: "Revision requested. Your order is back in production.",
     revisionAlreadyUsed: "The free revision for this order has already been used.",
     revisionError: "We could not request the revision. Please try again.",
+    sourcePhoto: {
+      title: "Upload your photos",
+      description: (min: number, max: number) =>
+        `Upload ${min}-${max} photos of each knife from different angles. Felipe will select and combine the best details from your photos.`,
+      maxSizeNote: (size: number) => `Maximum ${size} MB per photo.`,
+      knifeLabel: (index: number) => `Knife ${index}`,
+      countLabel: (count: number, max: number) => `${count} / ${max} photos`,
+      choose: "Add photos",
+      remove: "Remove",
+      removeConfirm: "Remove this photo from this order?",
+      finish: "Finish photo submission",
+      finishing: "Finishing...",
+      finishConfirm: "After finishing, you won't be able to add or remove source photos for this order.",
+      submitted: "Photos submitted",
+      states: {
+        queued: "Waiting",
+        uploading: "Uploading",
+        finalizing: "Registering",
+        completed: "Completed",
+        failed: "Failed",
+      },
+      errors: {
+        invalidInput: "Invalid data. Check and try again.",
+        fileTooLarge: (size: number) => `Files must be up to ${size} MB.`,
+        invalidType: "Only JPG, JPEG, PNG and WebP files are allowed.",
+        tooMany: (max: number) =>
+          max <= 0
+            ? "You've reached the maximum number of photos for this knife."
+            : `You can only add ${max} more photo(s) to this knife.`,
+        intakeClosed: "Photo submission has already been finished.",
+        minNotMet: "Each knife needs at least the minimum number of photos.",
+        notAuthenticated: "Your session expired. Please sign in again.",
+        forbidden: "You can only manage photos on your own orders.",
+        network: "Connection problem. Please try again.",
+        unknown: "Something went wrong. Please try again.",
+      },
+    },
   },
   dashboard: {
     title: "Admin dashboard",
@@ -176,6 +213,18 @@ const en = {
     dailyCapacity: "Daily capacity (editions per day)",
     cutoffTime: "Cutoff time (HH:MM)",
     timezone: "Timezone",
+    minSourcePhotosPerKnife: "Minimum source photos per knife",
+    maxSourcePhotosPerKnife: "Maximum source photos per knife",
+    maxSourcePhotoSizeMb: "Maximum source photo size (MB)",
+    sourcePhotoSnapshotNote:
+      "Changes to these settings only affect new orders. Existing orders keep the values captured when they were created.",
+    sourcePhotosTitle: "Source photos",
+    sourcePhotosKnife: (index: number) => `Knife ${index}`,
+    sourcePhotosCount: (count: number, min: number, max: number) =>
+      `${count} of ${min}–${max} expected`,
+    sourcePhotosSubmitted: "Photos submitted",
+    sourcePhotosNotSubmitted: "Not submitted yet",
+    sourcePhotosSubmittedAt: (date: string) => `Submitted at ${date}`,
     orderDetailTitle: "Order details",
     orderId: "Order ID",
     orderUser: "User",

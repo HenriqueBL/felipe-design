@@ -31,21 +31,29 @@ const statusSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
 });
 
-const settingsSchema = z.object({
-  dailyCapacity: z.coerce.number().int().min(1).max(1000),
-  cutoffTime: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/),
-  timezone: z.string().refine(
-    (value) => {
-      try {
-        new Intl.DateTimeFormat("en-US", { timeZone: value });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    "Invalid IANA timezone",
-  ),
-});
+const settingsSchema = z
+  .object({
+    dailyCapacity: z.coerce.number().int().min(1).max(1000),
+    cutoffTime: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/),
+    timezone: z.string().refine(
+      (value) => {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      "Invalid IANA timezone",
+    ),
+    minSourcePhotosPerKnife: z.coerce.number().int().min(1).max(100),
+    maxSourcePhotosPerKnife: z.coerce.number().int().min(1).max(100),
+    maxSourcePhotoSizeMb: z.coerce.number().int().min(1).max(200),
+  })
+  .refine((data) => data.maxSourcePhotosPerKnife >= data.minSourcePhotosPerKnife, {
+    message: "Max photos per knife must be >= min photos per knife.",
+    path: ["maxSourcePhotosPerKnife"],
+  });
 
 function safeLocale(locale: string): string {
   return locale === "pt" ? "pt" : "en";
@@ -135,6 +143,9 @@ export async function updateSettingsAction(
     dailyCapacity: formData.get("dailyCapacity"),
     cutoffTime: formData.get("cutoffTime"),
     timezone: formData.get("timezone"),
+    minSourcePhotosPerKnife: formData.get("minSourcePhotosPerKnife"),
+    maxSourcePhotosPerKnife: formData.get("maxSourcePhotosPerKnife"),
+    maxSourcePhotoSizeMb: formData.get("maxSourcePhotoSizeMb"),
   });
 
   if (!parsed.success) {
@@ -146,6 +157,9 @@ export async function updateSettingsAction(
       dailyCapacity: parsed.data.dailyCapacity,
       cutoffTime: parsed.data.cutoffTime,
       timezone: parsed.data.timezone,
+      minSourcePhotosPerKnife: parsed.data.minSourcePhotosPerKnife,
+      maxSourcePhotosPerKnife: parsed.data.maxSourcePhotosPerKnife,
+      maxSourcePhotoSizeMb: parsed.data.maxSourcePhotoSizeMb,
     });
     revalidatePath("/" + safeLocale(locale) + "/dashboard/settings");
     return { success: true, message: "Settings updated." };
