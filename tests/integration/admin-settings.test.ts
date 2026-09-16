@@ -79,7 +79,7 @@ async function createOrder(client: SupabaseClient, planId: string): Promise<stri
     p_currency: "BRL",
     p_idempotency_key: crypto.randomUUID(),
   });
-  if (error || !data) throw new Error("create_order failed: " + error.message);
+  if (error || !data) throw new Error("create_order failed: " + error?.message);
   createdOrderIds.push(data.id);
   return data.id;
 }
