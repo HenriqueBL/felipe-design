@@ -213,6 +213,18 @@ const en = {
     dailyCapacity: "Daily capacity (editions per day)",
     cutoffTime: "Cutoff time (HH:MM)",
     timezone: "Timezone",
+    minSourcePhotosPerKnife: "Minimum source photos per knife",
+    maxSourcePhotosPerKnife: "Maximum source photos per knife",
+    maxSourcePhotoSizeMb: "Maximum source photo size (MB)",
+    sourcePhotoSnapshotNote:
+      "Changes to these settings only affect new orders. Existing orders keep the values captured when they were created.",
+    sourcePhotosTitle: "Source photos",
+    sourcePhotosKnife: (index: number) => `Knife ${index}`,
+    sourcePhotosCount: (count: number, min: number, max: number) =>
+      `${count} of ${min}–${max} expected`,
+    sourcePhotosSubmitted: "Photos submitted",
+    sourcePhotosNotSubmitted: "Not submitted yet",
+    sourcePhotosSubmittedAt: (date: string) => `Submitted at ${date}`,
     orderDetailTitle: "Order details",
     orderId: "Order ID",
     orderUser: "User",

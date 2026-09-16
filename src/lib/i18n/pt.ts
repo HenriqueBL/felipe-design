@@ -215,6 +215,18 @@ const pt: Dictionary = {
     dailyCapacity: "Capacidade diária (edições por dia)",
     cutoffTime: "Horário de corte (HH:MM)",
     timezone: "Fuso horário",
+    minSourcePhotosPerKnife: "Mínimo de fotos por faca",
+    maxSourcePhotosPerKnife: "Máximo de fotos por faca",
+    maxSourcePhotoSizeMb: "Tamanho máximo por foto (MB)",
+    sourcePhotoSnapshotNote:
+      "Alterações nestas configurações afetam apenas novos pedidos. Pedidos existentes mantêm os valores capturados na criação.",
+    sourcePhotosTitle: "Fotos de origem",
+    sourcePhotosKnife: (index: number) => `Faca ${index}`,
+    sourcePhotosCount: (count: number, min: number, max: number) =>
+      `${count} de ${min}–${max} esperadas`,
+    sourcePhotosSubmitted: "Fotos enviadas",
+    sourcePhotosNotSubmitted: "Ainda não enviadas",
+    sourcePhotosSubmittedAt: (date: string) => `Enviadas em ${date}`,
     orderDetailTitle: "Detalhes do pedido",
     orderId: "ID do pedido",
     orderUser: "Usuário",

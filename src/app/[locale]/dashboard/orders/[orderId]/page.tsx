@@ -82,31 +82,56 @@ export default async function OrderDetailPage({
       </div>
 
       <div className="panel">
-        <h2>{dictionary.dashboard.customerPhotosTitle}</h2>
+        <h2>{dictionary.dashboard.sourcePhotosTitle}</h2>
+        <p className="note">
+          {order.source_photos_submitted_at !== null
+            ? dictionary.dashboard.sourcePhotosSubmittedAt(
+                formatDateTime(order.source_photos_submitted_at, intlLocale),
+              )
+            : dictionary.dashboard.sourcePhotosNotSubmitted}
+        </p>
         {sourceImages.length === 0 ? (
           <p>{dictionary.dashboard.noPhotos}</p>
         ) : (
-          <ul className="photo-list">
-            {sourceImages.map((image) => (
-              <li key={image.id}>
-                <span>{image.original_filename ?? image.storage_path}</span>
-                {image.signedUrl !== null ? (
-                  <a
-                    className="btn btn-secondary"
-                    href={image.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {dictionary.dashboard.openPhoto}
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          Array.from({ length: order.knife_quantity }, (_, i) => i + 1).map((knifeIndex) => {
+            const knifeImages = sourceImages.filter(
+              (image) => (image.knife_index ?? 1) === knifeIndex,
+            );
+            return (
+              <div key={knifeIndex} className="source-photo-knife">
+                <h3>
+                  {dictionary.dashboard.sourcePhotosKnife(knifeIndex)} —{" "}
+                  {dictionary.dashboard.sourcePhotosCount(
+                    knifeImages.length,
+                    order.required_source_photos_per_knife,
+                    order.max_source_photos_per_knife,
+                  )}
+                </h3>
+                {knifeImages.length === 0 ? (
+                  <p className="note">{dictionary.dashboard.noPhotos}</p>
+                ) : (
+                  <ul className="photo-list">
+                    {knifeImages.map((image) => (
+                      <li key={image.id}>
+                        {image.signedUrl !== null ? (
+                          <a href={image.signedUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={image.signedUrl}
+                              alt={image.original_filename ?? image.storage_path}
+                              className="source-photo-thumb"
+                              loading="lazy"
+                            />
+                          </a>
+                        ) : null}
+                        <span>{image.original_filename ?? image.storage_path}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })
         )}
-        <p className="note">
-          {dictionary.dashboard.photosLabel}: {sourceImages.length}/{order.total_images}
-        </p>
       </div>
 
       <div className="panel">
