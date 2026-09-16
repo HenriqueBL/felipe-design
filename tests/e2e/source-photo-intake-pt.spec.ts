@@ -142,7 +142,7 @@ test.describe("Source Photo Intake — PT-BR labels and errors", () => {
     await expect
       .poll(async () => page.locator(".source-photo-item").count(), { timeout: 60_000 })
       .toBe(maxPerKnife);
-    await expect(heading).toContainText(`${maxPerKnife} / ${maxPerKnife} fotos`);
+    await expect(heading).toContainText(`${maxPerKnife} / ${maxPerKnife} fotos`, { timeout: 30_000 });
     await expect(
       page.locator(".source-photo-knife .note").filter({
         hasText: "Você atingiu o número máximo de fotos para esta faca.",

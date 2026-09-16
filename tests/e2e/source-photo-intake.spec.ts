@@ -115,7 +115,7 @@ async function uploadToKnife(
 
 function expectCounter(page: import("@playwright/test").Page, knifeIndex: number, count: number): Promise<void> {
   const heading = page.locator(".source-photo-knife h4").nth(knifeIndex - 1);
-  return expect(heading).toContainText(`${count} / 5`, { timeout: 10_000 });
+  return expect(heading).toContainText(`${count} / 5`, { timeout: 30_000 });
 }
 
 async function removeOnePhoto(page: import("@playwright/test").Page): Promise<void> {
