@@ -190,6 +190,7 @@ export default async function CheckoutPage({
                   submit: dictionary.checkout.sendMagicLink,
                   success: dictionary.checkout.magicLinkSent,
                   error: dictionary.checkout.error,
+                  rateLimited: dictionary.checkout.magicLinkRateLimited,
                 }}
                 next={nextUrl}
               />

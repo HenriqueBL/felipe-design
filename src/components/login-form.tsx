@@ -10,6 +10,7 @@ interface LoginLabels {
   submit: string;
   success: string;
   error: string;
+  rateLimited: string;
 }
 
 interface LoginFormProps {
@@ -20,7 +21,9 @@ interface LoginFormProps {
 
 export default function LoginForm({ locale, labels, next }: LoginFormProps) {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "sending" | "sent" | "error" | "rate-limited"
+  >("idle");
   const supabase = createSupabaseBrowserClient();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -39,7 +42,11 @@ export default function LoginForm({ locale, labels, next }: LoginFormProps) {
     });
 
     if (error) {
-      setStatus("error");
+      // Rate limit do Supabase Auth: mensagem especifica, sem expor erro interno.
+      const isRateLimited =
+        error.status === 429 ||
+        (error.code ?? "").toLowerCase() === "over_email_send_rate_limit";
+      setStatus(isRateLimited ? "rate-limited" : "error");
       return;
     }
     setStatus("sent");
@@ -63,6 +70,9 @@ export default function LoginForm({ locale, labels, next }: LoginFormProps) {
       </button>
       {status === "sent" && <p className="form-status ok">{labels.success}</p>}
       {status === "error" && <p className="form-status err">{labels.error}</p>}
+      {status === "rate-limited" && (
+        <p className="form-status err">{labels.rateLimited}</p>
+      )}
     </form>
   );
 }

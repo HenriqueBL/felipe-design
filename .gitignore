@@ -35,3 +35,8 @@ coverage/
 
 supabase/.temp/
 .env.test.local
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
