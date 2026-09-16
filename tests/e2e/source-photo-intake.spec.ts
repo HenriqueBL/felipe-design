@@ -47,19 +47,28 @@ async function createOrderViaCheckout(
   return match[1]!;
 }
 
-async function simulatePayment(page: import("@playwright/test").Page): Promise<void> {
+async function simulatePayment(
+  page: import("@playwright/test").Page,
+  expectedBadge = ".badge.awaiting_photos",
+): Promise<void> {
   const payBtn = page.locator('button:has-text("Simulate payment")');
   await expect(payBtn).toBeVisible({ timeout: 10_000 });
   await payBtn.click();
-  await expect(page.locator(".badge.awaiting_photos")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(expectedBadge)).toBeVisible({ timeout: 30_000 });
 }
 
 /** Read real order state from server (never trust client-side status). */
-async function readOrderState(orderId: string): Promise<{ paid: boolean; submitted: boolean; status: string }> {
+async function readOrderState(orderId: string): Promise<{
+  paid: boolean;
+  submitted: boolean;
+  status: string;
+  productionReadyAt: string | null;
+  promisedDeliveryDate: string | null;
+}> {
   const admin = createFreshAdminClient();
   const { data, error } = await admin
     .from("orders")
-    .select("status, paid_at, source_photos_submitted_at, source_image_count")
+    .select("status, paid_at, source_photos_submitted_at, production_ready_at, promised_delivery_date")
     .eq("id", orderId)
     .single();
   if (error || !data) throw new Error(`INTAKE E2E: failed to read order ${orderId}: ${error?.message}`);
@@ -67,6 +76,8 @@ async function readOrderState(orderId: string): Promise<{ paid: boolean; submitt
     paid: data.paid_at !== null,
     submitted: data.source_photos_submitted_at !== null,
     status: data.status,
+    productionReadyAt: data.production_ready_at,
+    promisedDeliveryDate: data.promised_delivery_date,
   };
 }
 
@@ -201,6 +212,10 @@ test.describe("Source Photo Intake — focused", () => {
     expect(snapshot.paid).toBe(true);
     expect(snapshot.status).not.toBe("awaiting_payment");
     expect(snapshot.status).not.toBe("cancelled");
+    expect(snapshot.productionReadyAt).not.toBeNull();
+    expect(snapshot.promisedDeliveryDate).not.toBeNull();
+    expect(snapshot.productionReadyAt).not.toBeNull();
+    expect(snapshot.promisedDeliveryDate).not.toBeNull();
 
     // Server-side photo count matches minimum
     expect(await countSourcePhotos(orderId, 1)).toBeGreaterThanOrEqual(3);
@@ -283,7 +298,9 @@ test.describe("Source Photo Intake — focused", () => {
     expect(before.paid).toBe(false);
 
     // Then confirm payment via existing mock mechanism
-    await simulatePayment(page);
+    // Photos already submitted: after payment the order goes straight to
+    // the production queue (no awaiting_photos badge).
+    await simulatePayment(page, ".badge.in_queue");
     await page.reload();
     await page.waitForLoadState("networkidle");
 
@@ -292,6 +309,9 @@ test.describe("Source Photo Intake — focused", () => {
     expect(after.paid).toBe(true);
     expect(after.submitted).toBe(true);
     expect(after.status).not.toBe("awaiting_payment");
+    expect(after.productionReadyAt).not.toBeNull();
+    expect(after.promisedDeliveryDate).not.toBeNull();
+    await expect(page.locator(".badge.in_queue")).toBeVisible();
 
     await ctx.close();
   });
