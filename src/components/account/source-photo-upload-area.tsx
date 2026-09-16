@@ -2,6 +2,9 @@
 
 import { useId, useMemo, useRef, useState, useTransition } from "react";
 import { uploadSourcePhotoViaTus, SourcePhotoTusError } from "@/lib/source-photo-tus";
+import en from "@/lib/i18n/en";
+import pt from "@/lib/i18n/pt";
+import type { Locale } from "@/lib/i18n/config";
 import {
   authorizeSourcePhotoUploadAction,
   deleteSourcePhotoAction,
@@ -66,24 +69,40 @@ export interface SourcePhotoUploadLabels {
   };
 }
 
+type UploadJobErrorCode =
+  | "INVALID_FILE_TYPE"
+  | "FILE_TOO_LARGE"
+  | "MAX_PHOTOS_PER_KNIFE_EXCEEDED"
+  | "INTAKE_CLOSED"
+  | "MIN_NOT_MET"
+  | "NOT_AUTHENTICATED"
+  | "FORBIDDEN"
+  | "INVALID_INPUT"
+  | "NETWORK"
+  | "UNKNOWN";
+
 interface UploadJob {
   id: string;
   knifeIndex: number;
   filename: string;
   state: "queued" | "uploading" | "finalizing" | "completed" | "failed";
   progress: number; // 0..1
-  errorCode?: string;
+  errorCode?: UploadJobErrorCode;
+  /** Mensagem exibida, derivada de errorCode na falha. */
+  errorMessage?: string;
+  /** Id da imagem persistida (finalize). Marcado = ja contado em `images`. */
+  persistedImageId?: string;
 }
 
 export interface SourcePhotoUploadAreaProps {
   orderId: string;
+  locale: Locale;
   submitted: boolean;
   knifeQuantity: number;
   requiredPerKnife: number;
   maxPerKnife: number;
   maxPhotoSizeMb: number;
   images: SourcePhotoItem[];
-  labels: SourcePhotoUploadLabels;
 }
 
 const ACCEPT_ATTR = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
@@ -115,19 +134,35 @@ function formatProgress(job: UploadJob, labels: SourcePhotoUploadLabels): string
 export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps) {
   const {
     orderId,
+    locale,
     submitted,
     knifeQuantity,
     requiredPerKnife,
     maxPerKnife,
     maxPhotoSizeMb,
     images,
-    labels,
   } = props;
+
+  // Labels derivados client-side: Server Components nao podem passar funcoes
+  // (dicionarios com interpolacao) como props de Client Components.
+  const dictionary = locale === "pt" ? pt : en;
+  const sourcePhotoDict = dictionary.order.sourcePhoto;
+  const labels: SourcePhotoUploadLabels = {
+    ...sourcePhotoDict,
+    add: sourcePhotoDict.choose,
+    retry: sourcePhotoDict.choose,
+    errors: {
+      ...sourcePhotoDict.errors,
+      maxPhotos: sourcePhotoDict.errors.tooMany,
+    },
+  };
 
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [knifeNotice, setKnifeNotice] = useState<Record<number, string>>({});
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const headingId = useId();
@@ -139,8 +174,15 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
       const registered = images.filter(
         (img) => img.knifeIndex === k && !removedIds.has(img.id),
       ).length;
-      const completed = jobs.filter((j) => j.knifeIndex === k && j.state === "completed").length;
-      counts[k] = registered + completed;
+      // Jobs completed cuja imagem ja foi persistida sao contados no lado
+      // `registered` (apos revalidate) — nao podem somar duas vezes.
+      const pending = jobs.filter(
+        (j) =>
+          j.knifeIndex === k &&
+          j.state === "completed" &&
+          !j.persistedImageId,
+      ).length;
+      counts[k] = registered + pending;
     }
     return counts;
   }, [images, jobs, knifeQuantity, removedIds]);
@@ -222,7 +264,11 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
 
     // Guard: MIME invalido nunca inicia authorize/TUS.
     if (!isSourcePhotoMime(file.type)) {
-      updateJob(jobId, { state: "failed", errorCode: labels.errors.invalidType });
+      updateJob(jobId, {
+        state: "failed",
+        errorCode: "INVALID_FILE_TYPE",
+        errorMessage: labels.errors.invalidType,
+      });
       return;
     }
 
@@ -265,34 +311,82 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
       if (!final.success) {
         throw { errorCode: final.errorCode ?? "UNKNOWN" };
       }
-      updateJob(jobId, { state: "completed", progress: 1 });
+      // Persistido no servidor: a imagem entra em `images` apos revalidate;
+      // marcar evita contagem dupla no contador por faca.
+      updateJob(jobId, {
+        state: "completed",
+        progress: 1,
+        persistedImageId: final.imageId ?? undefined,
+      });
     } catch (error) {
-      updateJob(jobId, { state: "failed", errorCode: mapJobError(error) });
+      updateJob(jobId, {
+        state: "failed",
+        errorCode: mapJobErrorCode(error),
+        errorMessage: mapJobError(error),
+      });
     }
+  }
+
+  function mapJobErrorCode(error: unknown): UploadJobErrorCode {
+    if (error instanceof SourcePhotoTusError) return "NETWORK";
+    if (typeof error === "object" && error !== null && "errorCode" in error) {
+      const code = String((error as { errorCode?: string }).errorCode);
+      switch (code) {
+        case "FILE_TOO_LARGE":
+        case "OBJECT_TOO_LARGE":
+          return "FILE_TOO_LARGE";
+        case "INVALID_FILE_TYPE":
+        case "UNSUPPORTED_MIME":
+        case "OBJECT_MIME_INVALID":
+          return "INVALID_FILE_TYPE";
+        case "MAX_PHOTOS_PER_KNIFE_EXCEEDED":
+          return "MAX_PHOTOS_PER_KNIFE_EXCEEDED";
+        case "INTAKE_CLOSED":
+          return "INTAKE_CLOSED";
+        case "MIN_NOT_MET":
+          return "MIN_NOT_MET";
+        case "NOT_AUTHENTICATED":
+          return "NOT_AUTHENTICATED";
+        case "FORBIDDEN":
+        case "ORDER_NOT_FOUND":
+          return "FORBIDDEN";
+        case "INVALID_INPUT":
+          return "INVALID_INPUT";
+        default:
+          return "UNKNOWN";
+      }
+    }
+    return "UNKNOWN";
   }
 
   function onFilesSelected(knifeIndex: number, files: FileList | null) {
     const input = fileInputs.current[knifeIndex];
+    // BUGFIX: FileList e mutavel — copiar ANTES de limpar o input, senao
+    // input.value = "" esvazia a lista e o handler aborta com 0 arquivos.
+    const list = files ? Array.from(files) : [];
     if (input) input.value = "";
-    if (!files || files.length === 0) return;
+    if (list.length === 0) return;
 
     const current = countsByKnife[knifeIndex] ?? 0;
     const remaining = maxPerKnife - current;
-    const list = Array.from(files);
+
+    setKnifeNotice((prev) => ({ ...prev, [knifeIndex]: "" }));
 
     // Nunca iniciar mais uploads que a capacidade restante.
     if (list.length > remaining) {
-      const note = document.getElementById(headingId + "-error-" + knifeIndex);
-      if (note) {
-        note.textContent = labels.errors.tooMany(remaining);
-      }
+      setKnifeNotice((prev) => ({
+        ...prev,
+        [knifeIndex]: labels.errors.tooMany(remaining),
+      }));
     }
     const accepted = list.slice(0, Math.max(0, remaining));
     for (const file of accepted) {
       const clientError = clientValidationError(file);
       if (clientError) {
-        const note = document.getElementById(headingId + "-error-" + knifeIndex);
-        if (note) note.textContent = clientError;
+        setKnifeNotice((prev) => ({
+          ...prev,
+          [knifeIndex]: clientError,
+        }));
         continue;
       }
       void processFile(knifeIndex, file);
@@ -302,10 +396,10 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
   async function onDelete(imageId: string) {
     const confirmed = window.confirm(labels.removeConfirm);
     if (!confirmed) return;
+    setDeleteError(null);
     const result = await deleteSourcePhotoAction({ orderId, imageId });
     if (!result.success) {
-      const note = document.getElementById(headingId + "-error");
-      if (note) note.textContent = mapErrorCode(result.errorCode ?? "UNKNOWN");
+      setDeleteError(mapErrorCode(result.errorCode ?? "UNKNOWN"));
       return;
     }
     // Otimista: remove da UI ate a revalidacao trazer o estado do servidor.
@@ -385,7 +479,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
               ) : null}
               {job.state === "failed" ? (
                 <span className="note error" role="alert">
-                  {job.errorCode ?? labels.errors.unknown}
+                  {job.errorMessage ?? labels.errors.unknown}
                 </span>
               ) : null}
             </li>
@@ -426,12 +520,11 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                     />
                   </div>
                 )}
-                <p
-                  id={headingId + "-error-" + knifeIndex}
-                  className="note error"
-                  role="alert"
-                  aria-live="polite"
-                />
+                {knifeNotice[knifeIndex] ? (
+                  <p className="note error" role="alert" aria-live="polite">
+                    {knifeNotice[knifeIndex]}
+                  </p>
+                ) : null}
               </div>
             );
           })}
@@ -449,7 +542,11 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
               {submitError}
             </p>
           ) : null}
-          <p id={headingId + "-error"} className="note error" role="alert" aria-live="polite" />
+          {deleteError ? (
+            <p className="note error" role="alert">
+              {deleteError}
+            </p>
+          ) : null}
         </>
       )}
     </div>

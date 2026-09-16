@@ -202,33 +202,13 @@ export default async function CustomerOrderPage({
         <section className="auth-panel">
           <SourcePhotoUploadArea
             orderId={order.id}
+            locale={current}
             submitted={order.source_photos_submitted_at !== null}
             knifeQuantity={order.knife_quantity}
             requiredPerKnife={order.required_source_photos_per_knife}
             maxPerKnife={order.max_source_photos_per_knife}
             maxPhotoSizeMb={order.max_source_photo_size_mb}
             images={sourcePhotoItems}
-            labels={{
-              title: dictionary.order.sourcePhoto.title,
-              description: dictionary.order.sourcePhoto.description,
-              maxSizeNote: dictionary.order.sourcePhoto.maxSizeNote,
-              knifeLabel: dictionary.order.sourcePhoto.knifeLabel,
-              countLabel: dictionary.order.sourcePhoto.countLabel,
-              add: dictionary.order.sourcePhoto.choose,
-              choose: dictionary.order.sourcePhoto.choose,
-              retry: dictionary.order.sourcePhoto.choose,
-              remove: dictionary.order.sourcePhoto.remove,
-              removeConfirm: dictionary.order.sourcePhoto.removeConfirm,
-              finishing: dictionary.order.sourcePhoto.finishing,
-              finish: dictionary.order.sourcePhoto.finish,
-              finishConfirm: dictionary.order.sourcePhoto.finishConfirm,
-              submitted: dictionary.order.sourcePhoto.submitted,
-              states: dictionary.order.sourcePhoto.states,
-              errors: {
-                ...dictionary.order.sourcePhoto.errors,
-                maxPhotos: dictionary.order.sourcePhoto.errors.tooMany,
-              },
-            }}
           />
         </section>
       ) : null}

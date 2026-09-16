@@ -155,7 +155,6 @@ export type OrderImageUpdate = {
   knife_index?: number | null;
   storage_path?: string;
 };
-
 export type OrderRevisionRow = {
   id: string;
   order_id: string;
