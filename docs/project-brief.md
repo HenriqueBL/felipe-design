@@ -60,7 +60,7 @@ Site profissional bilíngue (EN / PT-BR) do designer de cutelaria Felipe: vitrin
 ## 9. Fila e prazo automático
 - Capacidade de produção: 4 edições por dia.
 - Cálculo do prazo em dias úteis.
-- O pedido só entra na fila (consome capacidade) quando atinge ready_for_production: pagamento confirmado E todas as fotos obrigatórias enviadas.
+- O pedido só entra na fila (consome capacidade) quando atinge ready_for_production: pagamento confirmado E intake de source photos finalizado pelo cliente ("Finish photo submission") E cada faca com o mínimo de fotos exigido. As duas ordens são suportadas: payment → photos → submit e photos → submit → payment.
 - Antes do readiness, a UI exibe apenas estimativa comercial ("X dias úteis após envio completo das fotos"); `promised_delivery_date` permanece NULL.
 - Ao atingir readiness, `maybe_mark_order_ready` calcula e fixa atomicamente o `promised_delivery_date`, que nunca diminui.
 - Horário de corte configurável no admin: ativação após o corte ou em dia não útil começa no próximo dia útil.
