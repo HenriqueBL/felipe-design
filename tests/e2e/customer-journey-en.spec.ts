@@ -144,8 +144,15 @@ test.describe("Complete Customer Journey — EN", () => {
     }
     await uploadInput.setInputFiles(files);
 
-    // Wait for upload completion indicators
-    await expect(customerPage.locator(".file-list li.ok, .upload-area")).toBeVisible({ timeout: 30_000 });
+    // Functional state: persisted images appear as .source-photo-item entries
+    // (completed jobs migrate from job-* to the persisted image list).
+    await expect
+      .poll(async () => customerPage.locator(".source-photo-item").count(), { timeout: 60_000 })
+      .toBeGreaterThanOrEqual(imagesToUpload);
+    // Counter per knife reflects the uploads and Finish becomes available.
+    const knifeHeading = customerPage.locator(".source-photo-knife h4").first();
+    await expect(knifeHeading).toContainText(new RegExp(`${imagesToUpload} / \\d+`), { timeout: 15_000 });
+    await expect(customerPage.locator('button:has-text("Finish photo submission")')).toBeEnabled();
 
     // Refresh to see updated state
     await customerPage.reload();

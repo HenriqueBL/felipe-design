@@ -344,8 +344,10 @@ test.describe("Source Photo Intake — focused", () => {
     // Upload to minimum in PT
     const input = page.locator('input[type="file"]').first();
     await input.setInputFiles([FIXTURE_IMAGE, FIXTURE_IMAGE, FIXTURE_IMAGE]);
+    // Functional state, not implementation: completed jobs become persisted
+    // images (.source-photo-item without a job-* suffix).
     await expect
-      .poll(async () => page.locator(".source-photo-item.job-completed").count(), { timeout: 60_000 })
+      .poll(async () => page.locator(".source-photo-item").count(), { timeout: 60_000 })
       .toBeGreaterThanOrEqual(3);
     await expect(page.locator(".source-photo-knife h4").first()).toContainText(/3 \/ 5 fotos/);
     await expect(page.locator('button:has-text("Finalizar envio das fotos")')).toBeEnabled();
