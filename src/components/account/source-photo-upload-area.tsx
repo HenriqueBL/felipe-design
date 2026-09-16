@@ -438,68 +438,76 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
         </p>
       ) : null}
 
-      {visibleImages.length > 0 || jobs.length > 0 ? (
-        <ul className="source-photo-list">
-          {visibleImages.map((img) => (
-            <li key={img.id} className="source-photo-item">
-              {img.url ? (
-                <img
-                  src={img.url}
-                  alt={img.filename}
-                  className="source-photo-thumb"
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="filename">{img.filename}</span>
-              {!submitted ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => void onDelete(img.id)}
-                  disabled={busy}
-                >
-                  {labels.remove}
-                </button>
-              ) : null}
-            </li>
-          ))}
-          {jobs.map((job) => (
-            <li
-              key={job.id}
-              className={"source-photo-item job-" + job.state}
-              aria-label={formatProgress(job, labels)}
-            >
-              <span className="filename">{formatProgress(job, labels)}</span>
-              {job.state === "uploading" ? (
-                <progress
-                  value={Math.floor(job.progress * 100)}
-                  max={100}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {job.state === "failed" ? (
-                <span className="note error" role="alert">
-                  {job.errorMessage ?? labels.errors.unknown}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {submitted ? null : (
-        <>
-          {Array.from({ length: knifeQuantity }, (_, i) => i + 1).map((knifeIndex) => {
-            const count = countsByKnife[knifeIndex] ?? 0;
-            const capacity = Math.max(0, maxPerKnife - count);
+      {Array.from({ length: knifeQuantity }, (_, i) => i + 1).map((knifeIndex) => {
+        const count = countsByKnife[knifeIndex] ?? 0;
+        const capacity = Math.max(0, maxPerKnife - count);
+            // Fotos e jobs desta faca ficam DENTRO do grupo — isolamento
+            // visual por faca (nunca uma lista global compartilhada).
+            const groupImages = visibleImages.filter((img) => img.knifeIndex === knifeIndex);
+            // Jobs completed cuja imagem ja foi persistida nao renderizam:
+            // a foto registrada ja representa o mesmo arquivo (id persistido).
+            const groupJobs = jobs.filter(
+              (j) =>
+                j.knifeIndex === knifeIndex &&
+                !(j.state === "completed" && j.persistedImageId),
+            );
             return (
               <div key={knifeIndex} className="source-photo-knife">
                 <h4>
                   {labels.knifeLabel(knifeIndex)} — {labels.countLabel(count, maxPerKnife)}
                 </h4>
-                {capacity === 0 ? (
+
+                {groupImages.length > 0 || groupJobs.length > 0 ? (
+                  <ul className="source-photo-list">
+                    {groupImages.map((img) => (
+                      <li key={img.id} className="source-photo-item">
+                        {img.url ? (
+                          <img
+                            src={img.url}
+                            alt={img.filename}
+                            className="source-photo-thumb"
+                            loading="lazy"
+                          />
+                        ) : null}
+                        <span className="filename">{img.filename}</span>
+                        {!submitted ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => void onDelete(img.id)}
+                            disabled={busy}
+                          >
+                            {labels.remove}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                    {groupJobs.map((job) => (
+                      <li
+                        key={job.id}
+                        className={"source-photo-item job-" + job.state}
+                        aria-label={formatProgress(job, labels)}
+                      >
+                        <span className="filename">{formatProgress(job, labels)}</span>
+                        {job.state === "uploading" ? (
+                          <progress
+                            value={Math.floor(job.progress * 100)}
+                            max={100}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        {job.state === "failed" ? (
+                          <span className="note error" role="alert">
+                            {job.errorMessage ?? labels.errors.unknown}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {!submitted && capacity === 0 ? (
                   <p className="note">{labels.errors.tooMany(0)}</p>
-                ) : (
+                ) : !submitted ? (
                   <div>
                     <label
                       className="btn btn-secondary"
@@ -519,7 +527,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                       className="visually-hidden-input"
                     />
                   </div>
-                )}
+                ) : null}
                 {knifeNotice[knifeIndex] ? (
                   <p className="note error" role="alert" aria-live="polite">
                     {knifeNotice[knifeIndex]}
@@ -529,26 +537,26 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
             );
           })}
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={onFinish}
-            disabled={!allKnivesAtMinimum || busy || submitting || pending}
-          >
-            {submitting || pending ? labels.finishing : labels.finish}
-          </button>
-          {submitError ? (
-            <p className="note error" role="alert">
-              {submitError}
-            </p>
-          ) : null}
-          {deleteError ? (
-            <p className="note error" role="alert">
-              {deleteError}
-            </p>
-          ) : null}
-        </>
-      )}
+      {!submitted ? (
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onFinish}
+          disabled={!allKnivesAtMinimum || busy || submitting || pending}
+        >
+          {submitting || pending ? labels.finishing : labels.finish}
+        </button>
+      ) : null}
+      {submitError ? (
+        <p className="note error" role="alert">
+          {submitError}
+        </p>
+      ) : null}
+      {deleteError ? (
+        <p className="note error" role="alert">
+          {deleteError}
+        </p>
+      ) : null}
     </div>
   );
 }

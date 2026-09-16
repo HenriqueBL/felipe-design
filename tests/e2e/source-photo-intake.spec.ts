@@ -94,9 +94,11 @@ async function uploadToKnife(
   for (let i = 0; i < fileCount; i++) files.push(FIXTURE_IMAGE);
 
   await input.setInputFiles(files);
-  // Wait for jobs to reach completed state per knife group.
+  // Jobs completed with a persisted image are rendered as registered
+  // photos, not as job rows — so wait on the knife group's item count.
+  const group = page.locator(".source-photo-knife").nth(knifeIndex - 1);
   await expect
-    .poll(async () => page.locator(".source-photo-item.job-completed").count(), { timeout: 60_000 })
+    .poll(async () => group.locator(".source-photo-item").count(), { timeout: 60_000 })
     .toBeGreaterThanOrEqual(fileCount);
 }
 
