@@ -95,6 +95,10 @@ export type OrderRow = {
   affiliate_id: string | null;
   paid_at: string | null;
   source_image_count: number;
+  required_source_photos_per_knife: number;
+  max_source_photos_per_knife: number;
+  max_source_photo_size_mb: number;
+  source_photos_submitted_at: string | null;
   idempotency_key: string | null;
   notes: string | null;
   created_at: string;
@@ -115,6 +119,10 @@ export type OrderInsert = {
   affiliate_id?: string | null;
   paid_at?: string | null;
   source_image_count?: number;
+  required_source_photos_per_knife?: number;
+  max_source_photos_per_knife?: number;
+  max_source_photo_size_mb?: number;
+  source_photos_submitted_at?: string | null;
   idempotency_key?: string | null;
   notes?: string | null;
 };
@@ -130,6 +138,7 @@ export type OrderImageRow = {
   id: string;
   order_id: string;
   kind: OrderImageKind;
+  knife_index: number | null;
   storage_path: string;
   original_filename: string | null;
   created_at: string;
@@ -138,10 +147,12 @@ export type OrderImageInsert = {
   id?: string;
   order_id: string;
   kind: OrderImageKind;
+  knife_index?: number | null;
   storage_path: string;
   original_filename?: string | null;
 };
 export type OrderImageUpdate = {
+  knife_index?: number | null;
   storage_path?: string;
 };
 
@@ -293,6 +304,9 @@ export type AppSettingRow = {
   daily_capacity: number;
   cutoff_time: string;
   timezone: string;
+  min_source_photos_per_knife: number;
+  max_source_photos_per_knife: number;
+  max_source_photo_size_mb: number;
   updated_at: string;
 };
 export type AppSettingInsert = {
@@ -300,11 +314,17 @@ export type AppSettingInsert = {
   daily_capacity?: number;
   cutoff_time?: string;
   timezone?: string;
+  min_source_photos_per_knife?: number;
+  max_source_photos_per_knife?: number;
+  max_source_photo_size_mb?: number;
 };
 export type AppSettingUpdate = {
   daily_capacity?: number;
   cutoff_time?: string;
   timezone?: string;
+  min_source_photos_per_knife?: number;
+  max_source_photos_per_knife?: number;
+  max_source_photo_size_mb?: number;
 };
 
 export type EstimateDeliveryResult = {
@@ -378,8 +398,32 @@ export type Database = {
         Returns: PlanRow;
       };
       update_app_settings: {
-        Args: { p_daily_capacity: number; p_cutoff_time: string; p_timezone: string };
+        Args: {
+          p_daily_capacity: number;
+          p_cutoff_time: string;
+          p_timezone: string;
+          p_min_source_photos_per_knife?: number | null;
+          p_max_source_photos_per_knife?: number | null;
+          p_max_source_photo_size_mb?: number | null;
+        };
         Returns: AppSettingRow;
+      };
+      register_source_image: {
+        Args: {
+          p_order_id: string;
+          p_knife_index: number;
+          p_storage_path: string;
+          p_original_filename?: string | null;
+        };
+        Returns: OrderImageRow;
+      };
+      submit_source_photos: {
+        Args: { p_order_id: string };
+        Returns: OrderRow;
+      };
+      delete_source_image: {
+        Args: { p_image_id: string };
+        Returns: string;
       };
       set_order_status: {
         Args: { p_order_id: string; p_status: OrderStatus };

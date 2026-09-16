@@ -243,6 +243,25 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
   let adminClient: SupabaseClient;
   const createdUserIds: string[] = [];
 
+  // Registra n source photos para uma faca via RPC autoritativa (0008+0010).
+  async function registerSource(
+    client: SupabaseClient,
+    orderId: string,
+    userId: string,
+    knifeIndex: number,
+    n: number,
+  ): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      const { error } = await client.rpc("register_source_image", {
+        p_order_id: orderId,
+        p_knife_index: knifeIndex,
+        p_storage_path: `${userId}/${orderId}/knife-${knifeIndex}/${crypto.randomUUID()}.jpg`,
+        p_original_filename: `photo_${knifeIndex}_${i}.jpg`,
+      });
+      if (error) throw new Error(`register_source_image failed: ${error.message}`);
+    }
+  }
+
   beforeAll(async () => {
     service = createServiceClient();
 
@@ -340,13 +359,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
     });
 
-    // Partial upload — should NOT activate
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/t1.jpg`,
-      original_filename: "t1.jpg",
-    });
+    // Partial upload — should NOT activate (knife 2 below minimum, no submit)
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
 
     const { data: partial } = await userClient
       .from("orders")
@@ -356,13 +370,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(partial!.production_ready_at).toBeNull();
     expect(partial!.promised_delivery_date).toBeNull();
 
-    // Final upload — trigger activates queue
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/t2.jpg`,
-      original_filename: "t2.jpg",
-    });
+    // Final upload + explicit submit — activates queue
+    await registerSource(userClient, order!.id, user.userId, 2, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: complete } = await userClient
       .from("orders")
@@ -387,12 +397,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
 
     // Upload BEFORE payment
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/photo.jpg`,
-      original_filename: "photo.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: beforePay } = await userClient
       .from("orders")
@@ -429,12 +435,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/idem.jpg`,
-      original_filename: "idem.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     const { data: first } = await userClient.rpc("confirm_order_payment", {
       p_order_id: order!.id,
@@ -503,19 +505,11 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    // Upload photos for both
-    await clientA.from("order_images").insert({
-      order_id: orderA!.id,
-      kind: "source",
-      storage_path: `${userA.userId}/${orderA!.id}/original/conc.jpg`,
-      original_filename: "conc.jpg",
-    });
-    await clientB.from("order_images").insert({
-      order_id: orderB!.id,
-      kind: "source",
-      storage_path: `${userB.userId}/${orderB!.id}/original/conc.jpg`,
-      original_filename: "conc.jpg",
-    });
+    // Upload photos + submit for both
+    await registerSource(clientA, orderA!.id, userA.userId, 1, 3);
+    await clientA.rpc("submit_source_photos", { p_order_id: orderA!.id });
+    await registerSource(clientB, orderB!.id, userB.userId, 1, 3);
+    await clientB.rpc("submit_source_photos", { p_order_id: orderB!.id });
 
     // Confirm payment CONCURRENTLY — both should activate without race
     const [resultA, resultB] = await Promise.all([
@@ -571,12 +565,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
         p_amount_cents: 7500,
         p_currency: "BRL",
       }),
-      userClient.from("order_images").insert({
-        order_id: order!.id,
-        kind: "source",
-        storage_path: `${user.userId}/${order!.id}/original/same.jpg`,
-        original_filename: "same.jpg",
-      }),
+      registerSource(userClient, order!.id, user.userId, 1, 3).then(() =>
+        userClient.rpc("submit_source_photos", { p_order_id: order!.id }),
+      ),
     ]);
 
     // Regardless of which completed first, final state must be consistent
@@ -606,13 +597,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    // Upload photo first
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/dup.jpg`,
-      original_filename: "dup.jpg",
-    });
+    // Upload photos + submit first
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // Fire two concurrent payment confirmations (same external_payment_id)
     const [first, second] = await Promise.all([
@@ -698,12 +685,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    await clientA.from("order_images").insert({
-      order_id: orderA!.id,
-      kind: "source",
-      storage_path: `${userA.userId}/${orderA!.id}/original/rls.jpg`,
-      original_filename: "rls.jpg",
-    });
+    await registerSource(clientA, orderA!.id, userA.userId, 1, 3);
 
     // Owner reads own images
     const { data: ownImages } = await clientA
@@ -1005,13 +987,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(paid!.paid_at).not.toBeNull();
     expect(paid!.production_ready_at).toBeNull();
 
-    // 4. Upload photo
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/smoke.jpg`,
-      original_filename: "smoke.jpg",
-    });
+    // 4. Upload photos + submit
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // 5. Verify activation
     const { data: activated } = await userClient
@@ -1074,13 +1052,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
     expect(order!.promised_delivery_date).toBeNull();
 
-    // 2. Upload photo BEFORE payment
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/fp.jpg`,
-      original_filename: "fp.jpg",
-    });
+    // 2. Upload photos + submit BEFORE payment
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // Not activated yet (no payment)
     const { data: beforePay } = await userClient
@@ -1120,12 +1094,8 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
       p_idempotency_key: crypto.randomUUID(),
     });
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/res.jpg`,
-      original_filename: "res.jpg",
-    });
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
     await userClient.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
@@ -1419,13 +1389,9 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
     expect(order!.promised_delivery_date).toBeNull();
 
-    // 2. Upload photo
-    await userClient.from("order_images").insert({
-      order_id: order!.id,
-      kind: "source",
-      storage_path: `${user.userId}/${order!.id}/original/full.jpg`,
-      original_filename: "full.jpg",
-    });
+    // 2. Upload photos + submit
+    await registerSource(userClient, order!.id, user.userId, 1, 3);
+    await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
     // 3. Mock payment via abstração (record_payment_intent + confirm_order_payment)
     const extId = "mock_smoke_full_" + order!.id;

@@ -138,6 +138,43 @@ const pt: Dictionary = {
     revisionRequested: "Revisão solicitada. Seu pedido voltou para produção.",
     revisionAlreadyUsed: "A revisão gratuita deste pedido já foi utilizada.",
     revisionError: "Não foi possível solicitar a revisão. Tente novamente.",
+    sourcePhoto: {
+      title: "Envie suas fotos",
+      description: (min: number, max: number) =>
+        `Envie de ${min} a ${max} fotos de cada faca em diferentes ângulos. Felipe poderá selecionar e combinar os melhores detalhes das suas fotos.`,
+      maxSizeNote: (size: number) => `Máximo de ${size} MB por foto.`,
+      knifeLabel: (index: number) => `Faca ${index}`,
+      countLabel: (count: number, max: number) => `${count} / ${max} fotos`,
+      choose: "Adicionar fotos",
+      remove: "Remover",
+      removeConfirm: "Remover esta foto deste pedido?",
+      finish: "Finalizar envio das fotos",
+      finishing: "Finalizando...",
+      finishConfirm: "Depois de finalizar, você não poderá adicionar nem remover as fotos deste pedido.",
+      submitted: "Fotos enviadas",
+      states: {
+        queued: "Aguardando",
+        uploading: "Enviando",
+        finalizing: "Registrando",
+        completed: "Concluído",
+        failed: "Falhou",
+      },
+      errors: {
+        invalidInput: "Dados inválidos. Verifique e tente novamente.",
+        fileTooLarge: (size: number) => `Arquivos devem ter até ${size} MB.`,
+        invalidType: "Somente arquivos JPG, JPEG, PNG e WebP são aceitos.",
+        tooMany: (max: number) =>
+          max <= 0
+            ? "Você atingiu o número máximo de fotos para esta faca."
+            : `Você pode adicionar apenas mais ${max} foto(s) nesta faca.`,
+        intakeClosed: "O envio das fotos já foi finalizado.",
+        minNotMet: "Cada faca precisa do número mínimo de fotos.",
+        notAuthenticated: "Sua sessão expirou. Entre novamente.",
+        forbidden: "Você só pode gerenciar fotos dos seus próprios pedidos.",
+        network: "Problema de conexão. Tente novamente.",
+        unknown: "Algo deu errado. Tente novamente.",
+      },
+    },
   },
   dashboard: {
     title: "Painel administrativo",
