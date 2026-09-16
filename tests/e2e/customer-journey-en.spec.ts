@@ -96,10 +96,10 @@ test.describe("Complete Customer Journey — EN", () => {
 
     // ─── STEP E: Create order ───
     // Now authenticated, should see "Create order" button instead of login form
-    await expect(customerPage.locator('button:has-text("Create order"), button[type="submit"]')).toBeVisible({ timeout: 10_000 });
-
-    // Click create order
-    await customerPage.click('button:has-text("Create order"), button[type="submit"]');
+    // Scope to main: the header now renders a Sign out <button type="submit">.
+    const createBtn = customerPage.locator("main").getByRole("button", { name: /create order/i });
+    await expect(createBtn).toBeVisible({ timeout: 10_000 });
+    await createBtn.click();
 
     // Should redirect to account order detail page
     await expect(customerPage).toHaveURL(/\/en\/account\/orders\//, { timeout: 15_000 });

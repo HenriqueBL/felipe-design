@@ -28,7 +28,11 @@ test.describe("Error States & Edge Cases E2E", () => {
     await chooseBtn.click();
     await page.waitForURL(/\/en\/checkout/, { timeout: 10000 });
 
-    const createBtn = page.locator('button:has-text("Create order"), button[type="submit"]').first();
+    // Scope to main: the header now renders a Sign out <button type="submit">,
+    // which a generic `button[type="submit"]` matcher would click instead.
+    const createBtn = page
+      .locator("main")
+      .getByRole("button", { name: /create order|finalize|finalizar/i });
     await createBtn.click();
     await page.waitForURL(/\/en\/account\/orders\//, { timeout: 15000 });
     orderId = page.url().match(/orders\/([0-9a-f-]+)/)?.[1] ?? "";

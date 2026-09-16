@@ -36,7 +36,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
     const nav = page.locator("nav.site-nav");
     await expect(nav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /sign out/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /sign out/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /my orders/i })).toBeVisible();
   });
 
@@ -46,7 +46,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
     const nav = page.locator("nav.site-nav");
     await expect(nav.getByRole("link", { name: /^entrar$/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /sair/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /sair/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /meus pedidos/i })).toBeVisible();
   });
 
@@ -58,7 +58,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
     const nav = page.locator("nav.site-nav");
     await expect(nav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /sign out/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /sign out/i })).toBeVisible();
   });
 
   test("authenticated checkout renders create-order step, not magic link form", async ({ page }) => {

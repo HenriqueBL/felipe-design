@@ -5,6 +5,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
 import { accountPath, servicesPath } from "@/lib/paths";
 import { getCurrentUser } from "@/services/auth";
+import { signOutAction } from "./actions";
 import "../globals.css";
 
 export function generateStaticParams() {
@@ -63,7 +64,12 @@ export default async function LocaleLayout({
               <Link href={servicesPath(current)}>{dictionary.nav.services}</Link>
               <Link href={accountPath(current)}>{dictionary.nav.account}</Link>
               {user ? (
-                <Link href="/auth/signout">{dictionary.nav.logout}</Link>
+                <form action={signOutAction} className="inline">
+                  <input type="hidden" name="locale" value={current} />
+                  <button type="submit" className="linklike">
+                    {dictionary.nav.logout}
+                  </button>
+                </form>
               ) : (
                 <Link href={`/${current}/login`}>{dictionary.nav.login}</Link>
               )}

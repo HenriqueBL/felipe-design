@@ -95,8 +95,10 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     await expect(customerPage).toHaveURL(/\/pt\/finalizar/, { timeout: 15_000 });
 
     // ─── STEP E: Create order ───
-    await expect(customerPage.locator('button:has-text("Criar pedido"), button[type="submit"]')).toBeVisible({ timeout: 10_000 });
-    await customerPage.click('button:has-text("Criar pedido"), button[type="submit"]');
+    // Scope to main: the header now renders a Sign out <button type="submit">.
+    const createBtn = customerPage.locator("main").getByRole("button", { name: /criar pedido/i });
+    await expect(createBtn).toBeVisible({ timeout: 10_000 });
+    await createBtn.click();
 
     // Should redirect to /pt/conta/pedidos/<orderId>
     await expect(customerPage).toHaveURL(/\/pt\/conta\/pedidos\//, { timeout: 15_000 });

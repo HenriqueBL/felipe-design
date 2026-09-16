@@ -940,3 +940,30 @@ textarea {
     flex: 1 1 40%;
   }
 }
+
+/* Sign-out button inside the nav: visually identical to a nav link. */
+.site-nav .linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.site-nav .linklike:hover {
+  text-decoration: underline;
+}
+
+/* Touch target: keep the sign-out button at least as tappable as nav links. */
+.site-nav .linklike {
+  min-height: 32px;
+  line-height: 32px;
+  display: inline-block;
+}
+
+/* Touch target: keep the sign-out button at least as tappable as nav links. */
+.site-nav .linklike {
+  min-height: 32px;
+  line-height: 32px;
+  display: inline-block;
+}

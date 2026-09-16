@@ -53,7 +53,11 @@ test.describe("Authorization & Access Control E2E", () => {
     await expect(page).toHaveURL(/\/en\/checkout/, { timeout: 10000 });
     await page.waitForLoadState("networkidle");
 
-    const createBtn = page.locator('button:has-text("Create order"), button[type="submit"]').first();
+    // Scope to main: the header now renders a Sign out <button type="submit">,
+    // which a generic `button[type="submit"]` matcher would click instead.
+    const createBtn = page
+      .locator("main")
+      .getByRole("button", { name: /create order/i });
     await expect(createBtn).toBeVisible({ timeout: 15000 });
     await createBtn.click();
 
