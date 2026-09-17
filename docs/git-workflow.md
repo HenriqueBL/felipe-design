@@ -29,6 +29,19 @@ npm run typecheck
 npm run build
 ```
 
+### Local release gate (while GitHub Actions is unavailable)
+
+While GitHub Actions is unavailable, `npm run verify:release` is the mandatory
+gate before any merge/deploy. It runs, in order: unit tests, lint, typecheck,
+production build, integration, e2e, production smoke (`npm run test:smoke`) —
+stopping at the first failure. Until the production smoke suite
+(branch `test/production-smoke`) is merged into `main`, the gate fails
+explicitly at that phase rather than silently substituting another suite.
+
+**Rule: only one execution at a time against Supabase DEV.** The integration
+and e2e phases use (and mutate) the shared DEV database; never run two
+verify:release sessions (or any other integration/e2e run) concurrently.
+
 Integration tests require `.env.test.local` pointing to the authorized Supabase DEV project (`jfsymthtepikfpexzxvk`). The safety guard in the test harness aborts if the configuration is wrong.
 
 ## Commit convention

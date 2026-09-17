@@ -44,6 +44,12 @@ npm run dev
 
 Verificações: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Migrations em `supabase/migrations` (aplicar na ordem 0001-0011). E2E: `npm run test:e2e`; integração: `npm run test:integration`.
 
+### Release gate local
+
+Enquanto o GitHub Actions estiver indisponível, `npm run verify:release` é o gate obrigatório antes de qualquer merge/deploy. Ele executa em ordem — unit, lint, typecheck, build, integration, e2e, production smoke (`npm run test:smoke`) — e para no primeiro erro. Enquanto a suíte de production smoke (`branch test/production-smoke`) não for mergeada em main, o gate falha explicitamente nessa fase, sem substituí-la por outra suíte.
+
+**Regra: somente uma execução por vez contra o Supabase DEV.** As fases de integration e e2e usam (e mutam) o banco DEV compartilhado; nunca rode duas sessões simultaneamente.
+
 ## Como contribuir
 
 Siga as convenções de estrutura, estilo e commit descritas no [AGENTS.md](AGENTS.md).
