@@ -130,6 +130,34 @@ export interface UpdatePlanPriceInput {
   amountCents: number;
 }
 
+export class PlanPriceError extends Error {
+  constructor(
+    public readonly code:
+      | "FORBIDDEN"
+      | "INVALID_AMOUNT"
+      | "SETTINGS_MISSING"
+      | "CONFLICT"
+      | "UNKNOWN",
+  ) {
+    super(code);
+    this.name = "PlanPriceError";
+  }
+}
+
+function mapSetPlanPriceError(rawMessage: string): PlanPriceError {
+  if (rawMessage.includes("FORBIDDEN")) return new PlanPriceError("FORBIDDEN");
+  if (rawMessage.includes("INVALID_AMOUNT")) {
+    return new PlanPriceError("INVALID_AMOUNT");
+  }
+  if (rawMessage.includes("SETTINGS_MISSING")) {
+    return new PlanPriceError("SETTINGS_MISSING");
+  }
+  if (rawMessage.includes("plan_prices_open_uq")) {
+    return new PlanPriceError("CONFLICT");
+  }
+  return new PlanPriceError("UNKNOWN");
+}
+
 export async function updatePlanPrice(input: UpdatePlanPriceInput): Promise<PlanPriceRow> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("set_plan_price", {
@@ -139,7 +167,7 @@ export async function updatePlanPrice(input: UpdatePlanPriceInput): Promise<Plan
   });
 
   if (error) {
-    throw new Error("Failed to update plan price: " + error.message);
+    throw mapSetPlanPriceError(error.message);
   }
   return data;
 }
