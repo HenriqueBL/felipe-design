@@ -285,6 +285,7 @@ const pt: Dictionary = {
   },
 
   common: {
+    skipToContent: "Ir para o conteúdo",
     notFound: "Página não encontrada",
     backHome: "Voltar ao início",
     save: "Salvar",

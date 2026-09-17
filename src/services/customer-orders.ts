@@ -85,3 +85,29 @@ export async function createSignedDownloadUrl(
   }
   return data.signedUrl;
 }
+
+// Batch: uma chamada createSignedUrls por bucket, mapeando por storage_path.
+// Falha parcial deixa a entrada ausente; nunca associa URL a imagem errada.
+export async function createSignedDownloadUrls(
+  bucket: string,
+  storagePaths: string[],
+  expiresIn = 3600,
+): Promise<Map<string, string>> {
+  const supabase = await createSupabaseServerClient();
+  const urls = new Map<string, string>();
+  if (storagePaths.length === 0) {
+    return urls;
+  }
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(storagePaths, expiresIn);
+  if (error || !data) {
+    return urls;
+  }
+  for (const entry of data) {
+    if (entry.path && !entry.error && entry.signedUrl) {
+      urls.set(entry.path, entry.signedUrl);
+    }
+  }
+  return urls;
+}

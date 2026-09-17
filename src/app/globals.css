@@ -68,6 +68,25 @@ a:hover {
   padding: 0 24px;
 }
 
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 10px 18px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0 0 6px 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
 .site-header {
   border-bottom: 1px solid var(--border);
   background: rgba(29, 25, 23, 0.85);
