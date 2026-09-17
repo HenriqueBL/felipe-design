@@ -101,26 +101,14 @@ async function createFixturePlan(
     .single();
   if (planErr || !plan) throw new Error(`Plan upsert failed: ${planErr?.message}`);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: existingPrice } = await adminClient
-    .from("plan_prices")
-    .select("id")
-    .eq("plan_id", plan.id)
-    .eq("currency", "BRL")
-    .eq("valid_from", today)
-    .maybeSingle();
-  if (existingPrice) return plan.id;
-
-  const { error: priceErr } = await adminClient
-    .from("plan_prices")
-    .insert({
-      plan_id: plan.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: today,
-      active: true,
-    });
-  if (priceErr) throw new Error(`Price insert failed: ${priceErr.message}`);
+  // set_plan_price closes any previous open price, keeping at most one open
+  // row per plan+currency (no accumulation across runs on different days).
+  const { error: priceErr } = await adminClient.rpc("set_plan_price", {
+    p_plan_id: plan.id,
+    p_currency: "BRL",
+    p_amount_cents: 7500,
+  });
+  if (priceErr) throw new Error(`set_plan_price failed: ${priceErr.message}`);
   return plan.id;
 }
 

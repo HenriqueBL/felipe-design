@@ -9,6 +9,9 @@ export default defineConfig({
   test: {
     include: ["tests/integration/**/*.test.ts"],
     testTimeout: 30000,
+    // Integration suites mutate shared state (app_settings, plan_prices,
+    // fixtures); running files in parallel causes races. Serial by default.
+    fileParallelism: false,
     // afterAll cleanup deletes fixture users via the Supabase DEV API; the
     // default 10s hook timeout is too tight on CI runners (GH network latency).
     hookTimeout: 120000,

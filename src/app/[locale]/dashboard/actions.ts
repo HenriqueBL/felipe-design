@@ -7,7 +7,7 @@ import { requireEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/services/auth";
 import { setOrderStatus } from "@/services/orders";
-import { setPlanActive, updatePlanPrice } from "@/services/plans";
+import { PlanPriceError, setPlanActive, updatePlanPrice } from "@/services/plans";
 import { updateAppSettings } from "@/services/settings";
 
 export interface ActionResult {
@@ -83,7 +83,17 @@ export async function updatePriceAction(
     revalidatePath("/" + safeLocale(locale) + "/dashboard/plans");
     return { success: true, message: "Price updated." };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Failed." };
+    if (error instanceof PlanPriceError) {
+      const messages: Record<PlanPriceError["code"], string> = {
+        FORBIDDEN: "You are not allowed to update prices.",
+        INVALID_AMOUNT: "Invalid price value.",
+        SETTINGS_MISSING: "Server settings are unavailable. Try again later.",
+        CONFLICT: "Price was modified concurrently. Reload and try again.",
+        UNKNOWN: "Failed to update price. Try again.",
+      };
+      return { success: false, message: messages[error.code] };
+    }
+    return { success: false, message: "Failed to update price. Try again." };
   }
 }
 
