@@ -66,14 +66,28 @@ Conclusão 0009: em um banco PROD **vazio**, os `DELETE`s não encontram rows
 
 ## PHASE 2 — Supabase PROD
 
-- [ ] Criar projeto Supabase PROD (ação humana)
-- [ ] Anotar `SUPABASE_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY` do projeto PROD
-- [ ] `supabase link --project-ref <ref>` (ação humana)
-- [ ] `supabase db push` aplicando 0001–0011 em banco vazio (companion humano; conferir log da 0009)
-- [ ] Criar primeiro usuário admin: magic link + `update public.profiles set role='admin' where email='...'` (SQL Editor; ação humana)
-- [ ] Configurar preços reais via `/dashboard/plans` (substitui o que 0005 não semearia)
-- [ ] Configurar `app_settings` (capacidade, cutoff, min/max fotos) via dashboard
-- [ ] Verificar buckets `client-uploads` (private), `order-results` (private), `portfolio` (public) criados pela 0002
+**Status (2026-09-17): CONCLUÍDO até a aplicação de migrations e validação.**
+
+- [x] Criar projeto Supabase PROD (ação humana)
+  - Project name: `felipe-design-prod`
+  - Project ref: `xwsghpzvbiguvnvwiuoq`
+  - Region: `sa-east-1` (South America / São Paulo)
+  - Status: ACTIVE_HEALTHY
+- [ ] Anotar `SUPABASE_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY` do projeto PROD (para a fase Vercel)
+- [x] `supabase link --project-ref xwsghpzvbiguvnvwiuoq` — CURRENT LINK = PROD
+- [x] `supabase db push` aplicando 0001–0011 em banco vazio confirmado
+  - Todas as 11 migrations aplicadas com sucesso (nenhuma falha)
+  - Migration 0009: DELETEs de fixture DEV afetaram **0 rows** (como previsto pela auditoria); guards passaram; constraint `order_images_source_requires_knife` validada
+- [x] Validação de schema: tabelas core presentes (profiles, plans, plan_prices, orders, order_images, order_revisions, payments, payment_events, affiliates, affiliate_commissions, portfolio_items, app_settings); colunas de source photo intake confirmadas (knife_index em order_images; snapshots + source_photos_submitted_at + production_ready_at + paid_at em orders)
+- [x] Validação de RLS: rowsecurity=true em todas as tabelas public; policies presentes por tabela
+- [x] Validação de RPCs: todas as 22 funções presentes (create_order, register_source_image, delete_source_image, submit_source_photos, update_app_settings, confirm_order_payment, record_payment_intent, maybe_mark_order_ready, estimate_delivery, set_*, request_order_revision, is_admin, helpers de fila e triggers)
+- [x] Validação de Storage: buckets `client-uploads` (PRIVATE), `order-results` (PRIVATE), `portfolio` (public)
+- [x] Verificar buckets `client-uploads` (private), `order-results` (private), `portfolio` (public) criados pela 0002
+- [x] `app_settings` validado (defaults): daily_capacity=4, cutoff_time=17:00, timezone=America/Sao_Paulo, min_source_photos_per_knife=3, max_source_photos_per_knife=5, max_source_photo_size_mb=25
+- [ ] Configurar preços reais via `/dashboard/plans` — **PENDING ADMIN CONFIGURATION** (os valores atuais em `plan_prices` são fixtures da seed da 0005, não preços reais)
+- [ ] Configurar `app_settings` (capacidade, cutoff, min/max fotos) via dashboard — conferir valores reais antes do lançamento
+- [ ] Criar primeiro usuário admin — **PENDING HUMAN ACTION** (magic link + `update public.profiles set role='admin'` via SQL Editor)
+- [ ] Auth: Site URL e Redirect URLs de produção — **PENDING VERCEL/DOMAIN PHASE**
 - [ ] PASS: `select count(*) from public.plans;` = 3; admin consegue logar no dashboard; buckets listados
 
 ## PHASE 3 — Vercel / domain / auth / email
@@ -134,5 +148,5 @@ Conclusão 0009: em um banco PROD **vazio**, os `DELETE`s não encontram rows
 
 - RLS ativa em todas as tabelas; RPCs SECURITY DEFINER têm guards (`is_admin`, ownership) e `search_path = public` fixado — bom.
 - `register_source_image` é a única via de insert de source (0010) — bom.
-- Limites de tamanho de arquivo são validados no client + snapshot por pedido; o Storage em si não enforce tamanho — aceitável para lançamento, monitorar.
+- Limites de source photo upload: validação em três camadas — client (MIME), snapshot por pedido e verificação server-side no finalize (objeto real consultado no Storage: existência, tamanho e MIME comparados ao snapshot do pedido; falhas disparam cleanup de orphan). O Storage em si não enforce tamanho, mas o finalize rejeita e remove objetos fora da política.
 - Sem rate limiting próprio de aplicação além do Supabase — RECOMMENDED antes do lançamento.
