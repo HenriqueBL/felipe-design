@@ -7,6 +7,7 @@ const en = {
     home: "Home",
     services: "Services",
     about: "About",
+    gallery: "Gallery",
     login: "Sign in",
     logout: "Sign out",
     account: "My orders",
@@ -250,6 +251,37 @@ const en = {
     photosLabel: "Photos",
     revisionTitleAdmin: "Revision requested",
   },
+
+  about: {
+    metaTitle: "About Felipe Design | Knife Photo Editing",
+    metaDescription: "The story behind Felipe Design: over five years of professional knife photo editing, official photo editor of Legacy of Steel II and published work in BLADE Magazine.",
+    title: "About Felipe Design",
+    lede: "Over five years turning client photos into professional knife imagery — from Pernambuco, Brazil, to an international audience.",
+    paragraphs: [
+      "Felipe Silva, born on May 26, 2001, in Pernambuco, Brazil, began his journey in photo editing in 2020.",
+      "Driven by an interest in image editing and the encouragement of a close friend, Felipe took his first steps through tests and partnerships, working to develop his craft and earn his place in the Brazilian cutlery market.",
+      "From the beginning, his approach was to work directly with photos taken by the clients themselves. The entire process can be done remotely — no knives need to be shipped, removing the costs and risks of transporting the pieces.",
+      "Over the years, Felipe has refined different aspects of his editing process, always pursuing more natural, precise and professional-looking results, transforming straightforward client photos into high-end images.",
+      "Today, with more than five years of experience, his work has earned a place in the Brazilian market and reached an international audience. Felipe is the official photo editor of the book Legacy of Steel II, and his work has been published in some of the world's leading cutlery magazines, including BLADE Magazine.",
+      "See more of his work in the Gallery.",
+    ],
+    ctaGallery: "Visit the gallery",
+  },
+  gallery: {
+    metaTitle: "Gallery | Felipe Design",
+    metaDescription: "Selected knife photo editing work by Felipe Design — before and after transformations of custom knife photography.",
+    title: "Gallery",
+    subtitle: "A selection of Felipe Design's knife photo editing work.",
+    emptyTitle: "Gallery coming soon",
+    emptyBody: "Real portfolio images will be published here. Check back soon.",
+  },
+  footer: {
+    tagline: "Professional knife photo editing, delivered remotely.",
+    navigation: "Navigation",
+    language: "Language",
+    copyright: (year: number) => "Felipe Design © " + year,
+  },
+
   common: {
     notFound: "Page not found",
     backHome: "Back to home",
