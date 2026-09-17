@@ -9,6 +9,7 @@ const pt: Dictionary = {
     home: "Início",
     services: "Serviços",
     about: "Sobre",
+    gallery: "Galeria",
     login: "Entrar",
     logout: "Sair",
     account: "Meus pedidos",
@@ -252,6 +253,37 @@ const pt: Dictionary = {
     photosLabel: "Fotos",
     revisionTitleAdmin: "Revisão solicitada",
   },
+
+  about: {
+    metaTitle: "Sobre o Felipe Design | Edição de Fotos de Facas",
+    metaDescription: "A história por trás do Felipe Design: mais de cinco anos de edição profissional de fotos de facas, editor oficial do livro Legacy of Steel II e trabalhos publicados na BLADE Magazine.",
+    title: "Sobre o Felipe Design",
+    lede: "Mais de cinco anos transformando fotos dos clientes em imagens profissionais de facas — de Pernambuco, Brasil, para o mundo.",
+    paragraphs: [
+      "Felipe Silva, nascido em 26 de maio de 2001, em Pernambuco, Brasil, iniciou sua jornada na edição de fotografias em 2020.",
+      "Movido pelo interesse em edição de imagens e pelo incentivo de um amigo próximo, Felipe deu seus primeiros passos por meio de testes e parcerias, buscando desenvolver seu trabalho e conquistar espaço no mercado brasileiro de cutelaria.",
+      "Desde o início, sua proposta foi trabalhar diretamente com fotografias produzidas pelos próprios clientes. Assim, todo o processo pode ser realizado à distância, sem a necessidade de envio das facas e eliminando os custos e riscos envolvidos no transporte das peças.",
+      "Ao longo dos anos, Felipe aperfeiçoou diferentes aspectos de seu processo de edição, buscando cada vez mais naturalidade, precisão e uma aparência profissional para transformar fotografias feitas de maneira simples pelos clientes em imagens de alto nível.",
+      "Hoje, com mais de cinco anos de experiência, seu trabalho conquistou espaço no mercado brasileiro e também alcançou projeção internacional. Felipe é o editor de fotografias oficial do livro Legacy of Steel II e possui trabalhos publicados em algumas das principais revistas especializadas em cutelaria do mundo, incluindo a BLADE Magazine.",
+      "Conheça mais do seu trabalho na aba Galeria.",
+    ],
+    ctaGallery: "Ver a galeria",
+  },
+  gallery: {
+    metaTitle: "Galeria | Felipe Design",
+    metaDescription: "Trabalhos selecionados de edição de fotos de facas do Felipe Design — transformações de antes e depois de fotografias de facas personalizadas.",
+    title: "Galeria",
+    subtitle: "Uma seleção dos trabalhos de edição de fotos de facas do Felipe Design.",
+    emptyTitle: "Galeria em breve",
+    emptyBody: "As imagens reais do portfólio serão publicadas aqui. Volte em breve.",
+  },
+  footer: {
+    tagline: "Edição profissional de fotos de facas, à distância.",
+    navigation: "Navegação",
+    language: "Idioma",
+    copyright: (year: number) => "Felipe Design © " + year,
+  },
+
   common: {
     notFound: "Página não encontrada",
     backHome: "Voltar ao início",
