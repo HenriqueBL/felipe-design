@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
+import { isLocale, locales, type Locale } from "@/lib/i18n/config";
 import { accountPath, servicesPath } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
 import { getCurrentUser } from "@/services/auth";
@@ -14,7 +15,10 @@ export function generateStaticParams() {
 }
 
 function resolveLocale(locale: string): Locale {
-  return isLocale(locale) ? locale : defaultLocale;
+  if (!isLocale(locale)) {
+    notFound();
+  }
+  return locale;
 }
 
 export async function generateMetadata({
