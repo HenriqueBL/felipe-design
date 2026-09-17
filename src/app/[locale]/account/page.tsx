@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDictionary } from "@/lib/i18n/dictionaries";
@@ -7,6 +8,11 @@ import { listCustomerOrders } from "@/services/customer-orders";
 import { formatDate, formatMoney } from "@/lib/format";
 import { accountOrderPath, servicesPath } from "@/lib/paths";
 import { deriveOrderDisplayState } from "@/domain/checkout";
+
+export const metadata: Metadata = {
+  title: "Account | Felipe Design",
+  robots: { index: false, follow: false },
+};
 
 export default async function AccountPage({
   params,

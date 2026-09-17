@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
+import { isLocale, locales, type Locale } from "@/lib/i18n/config";
 import { accountPath, servicesPath } from "@/lib/paths";
+import { publicPath, siteUrl } from "@/lib/site";
 import { getCurrentUser } from "@/services/auth";
 import { signOutAction } from "./actions";
 import "../globals.css";
@@ -13,7 +15,10 @@ export function generateStaticParams() {
 }
 
 function resolveLocale(locale: string): Locale {
-  return isLocale(locale) ? locale : defaultLocale;
+  if (!isLocale(locale)) {
+    notFound();
+  }
+  return locale;
 }
 
 export async function generateMetadata({
@@ -24,17 +29,33 @@ export async function generateMetadata({
   const { locale } = await params;
   const current = resolveLocale(locale);
   const dictionary = await getDictionary(current);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = siteUrl();
+  const canonical = base + publicPath(current, "home");
 
   return {
     title: dictionary.meta.title,
     description: dictionary.meta.description,
     alternates: {
-      canonical: `${siteUrl}/${current}`,
+      canonical,
       languages: {
-        en: `${siteUrl}/en`,
-        pt: `${siteUrl}/pt`,
+        en: base + "/en",
+        pt: base + "/pt",
+        "x-default": base + "/en",
       },
+    },
+    openGraph: {
+      type: "website",
+      siteName: "Felipe Design",
+      locale: current === "pt" ? "pt_BR" : "en_US",
+      alternateLocale: current === "pt" ? ["en_US"] : ["pt_BR"],
+      title: dictionary.meta.title,
+      description: dictionary.meta.description,
+      url: canonical,
+    },
+    twitter: {
+      card: "summary",
+      title: dictionary.meta.title,
+      description: dictionary.meta.description,
     },
   };
 }
