@@ -44,11 +44,29 @@ begin
     raise exception 'CURRENCY_MISMATCH';
   end if;
 
-  select * into v_payment
-  from public.payments
-  where provider = p_provider and external_payment_id = p_external_payment_id;
+  -- Insercao atomica e idempotente sob concorrencia: duas chamadas
+  -- simultâneas com o mesmo (provider, external_payment_id) nao podem
+  -- colidir em unique_violation; a perdedora apenas le a linha existente.
+  insert into public.payments (
+    order_id, provider, external_payment_id, status, amount_cents, currency
+  ) values (
+    p_order_id, p_provider, p_external_payment_id, 'pending', p_amount_cents, p_currency
+  )
+  on conflict (provider, external_payment_id) do nothing
+  returning * into v_payment;
 
-  if found then
+  if not found then
+    -- Linha existente (inserida por chamada concorrente ou anterior):
+    -- valida todos os campos antes de retornar. Nunca atualiza
+    -- silenciosamente order_id, amount ou currency.
+    select * into v_payment
+    from public.payments
+    where provider = p_provider and external_payment_id = p_external_payment_id;
+
+    if not found then
+      raise exception 'PAYMENT_INSERT_FAILED';
+    end if;
+
     if v_payment.order_id <> p_order_id then
       raise exception 'PAYMENT_ORDER_MISMATCH';
     end if;
@@ -58,15 +76,7 @@ begin
     if v_payment.currency is distinct from p_currency then
       raise exception 'CURRENCY_MISMATCH';
     end if;
-    return v_payment;
   end if;
-
-  insert into public.payments (
-    order_id, provider, external_payment_id, status, amount_cents, currency
-  ) values (
-    p_order_id, p_provider, p_external_payment_id, 'pending', p_amount_cents, p_currency
-  )
-  returning * into v_payment;
 
   return v_payment;
 end;

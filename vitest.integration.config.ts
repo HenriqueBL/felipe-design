@@ -22,6 +22,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      // Stub: server-only lanca erro fora do runtime do Next.js; nos testes
+      // de integracao o modulo e importado em contexto Node puro.
+      "server-only": path.resolve(
+        __dirname,
+        "tests/integration/stubs/server-only.ts",
+      ),
     },
   },
 });

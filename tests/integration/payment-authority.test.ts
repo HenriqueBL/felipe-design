@@ -437,7 +437,76 @@ describe("Payment Authority (migration 0012)", () => {
     expect(badCurrency.error!.message).toMatch(/CURRENCY_MISMATCH/);
   });
 
-  it("11. cross-user: server action de pagamento simulado e bloqueado para pedido de outro usuario", async () => {
+  it("12. duas chamadas concorrentes identicas de record_payment_intent retornam o mesmo payment sem erro", async () => {
+    const { client: userClient } = await getIdentity("pa-owner");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+    const externalId = "mock_intconc_" + order.id;
+
+    const args = {
+      p_order_id: order.id,
+      p_provider: "mock" as const,
+      p_external_payment_id: externalId,
+      p_amount_cents: order.totalCents,
+      p_currency: "BRL",
+    };
+    const results = await Promise.all([
+      service.rpc("record_payment_intent", args),
+      service.rpc("record_payment_intent", args),
+    ]);
+    for (const r of results) {
+      expect(r.error).toBeNull();
+      expect(r.data).toBeTruthy();
+    }
+    // Mesma linha retornada pelas duas chamadas.
+    expect(results[0].data!.id).toBe(results[1].data!.id);
+
+    const { count, error } = await service
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", order.id)
+      .eq("external_payment_id", externalId);
+    if (error) throw new Error(error.message);
+    expect(count).toBe(1);
+
+    const { data: p } = await service
+      .from("payments")
+      .select("order_id, amount_cents, currency")
+      .eq("external_payment_id", externalId)
+      .single();
+    expect(p!.order_id).toBe(order.id);
+    expect(p!.amount_cents).toBe(order.totalCents);
+    expect(p!.currency).toBe("BRL");
+  });
+
+  it("13. record_payment_intent com external_payment_id de outro pedido recebe PAYMENT_ORDER_MISMATCH", async () => {
+    const { client: userClient } = await getIdentity("pa-owner");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const orderA = await createOrder(userClient, planId);
+    const orderB = await createOrder(userClient, planId);
+    const externalId = "mock_intxorder_" + crypto.randomUUID();
+
+    const first = await service.rpc("record_payment_intent", {
+      p_order_id: orderA.id,
+      p_provider: "mock",
+      p_external_payment_id: externalId,
+      p_amount_cents: orderA.totalCents,
+      p_currency: "BRL",
+    });
+    expect(first.error).toBeNull();
+
+    const second = await service.rpc("record_payment_intent", {
+      p_order_id: orderB.id,
+      p_provider: "mock",
+      p_external_payment_id: externalId,
+      p_amount_cents: orderB.totalCents,
+      p_currency: "BRL",
+    });
+    expect(second.error).toBeTruthy();
+    expect(second.error!.message).toMatch(/PAYMENT_ORDER_MISMATCH/);
+  });
+
+  it("11. cross-user: RLS impede leitura do pedido alheio e RPCs financeiras sao service_role-only", async () => {
     const a = await getIdentity("pa-owner");
     const b = await getIdentity("pa-other");
     const planId = await createFixturePlan(adminClient, 1, 7500);
