@@ -427,7 +427,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
   return (
     <div className="source-photo-upload" id={headingId}>
       <h3>{labels.title}</h3>
-      <p>
+      <p id={headingId + "-description"}>
         {labels.description(requiredPerKnife, maxPerKnife)}{" "}
         {labels.maxSizeNote(maxPhotoSizeMb)}
       </p>
@@ -509,12 +509,6 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                   <p className="note">{labels.errors.tooMany(0)}</p>
                 ) : !submitted ? (
                   <div>
-                    <label
-                      className="btn btn-secondary"
-                      htmlFor={headingId + "-file-" + knifeIndex}
-                    >
-                      {labels.choose}
-                    </label>
                     <input
                       ref={(el) => {
                         fileInputs.current[knifeIndex] = el;
@@ -525,11 +519,29 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                       multiple
                       onChange={(e) => onFilesSelected(knifeIndex, e.target.files)}
                       className="visually-hidden-input"
+                      aria-describedby={
+                        headingId +
+                        "-description" +
+                        (knifeNotice[knifeIndex]
+                          ? " " + headingId + "-notice-" + knifeIndex
+                          : "")
+                      }
                     />
+                    <label
+                      className="btn btn-secondary"
+                      htmlFor={headingId + "-file-" + knifeIndex}
+                    >
+                      {labels.choose}
+                    </label>
                   </div>
                 ) : null}
                 {knifeNotice[knifeIndex] ? (
-                  <p className="note error" role="alert" aria-live="polite">
+                  <p
+                    className="note error"
+                    role="alert"
+                    aria-live="polite"
+                    id={headingId + "-notice-" + knifeIndex}
+                  >
                     {knifeNotice[knifeIndex]}
                   </p>
                 ) : null}
