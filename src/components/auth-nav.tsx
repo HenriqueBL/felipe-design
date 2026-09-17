@@ -28,7 +28,7 @@ export default function AuthNav({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSignedIn(session?.user !== null);
+      setSignedIn(Boolean(session?.user));
     });
     return () => subscription.unsubscribe();
   }, []);
