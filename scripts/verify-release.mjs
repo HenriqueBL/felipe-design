@@ -6,6 +6,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
+import process from "node:process";
 
 const isWindows = process.platform === "win32";
 const npmCmd = isWindows ? "npm.cmd" : "npm";
@@ -50,6 +51,9 @@ async function startSmokeServer() {
   const child = spawn(npmCmd, ["run", "--silent", "start", "--", "-p", String(SMOKE_PORT), "-H", "127.0.0.1"], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: isWindows,
+    // POSIX: own process group so cleanup can terminate the whole tree
+    // (npm spawns `next start` as a descendant that survives a bare SIGTERM).
+    detached: !isWindows,
     env: { ...process.env },
   });
   const log = [];
@@ -62,22 +66,54 @@ async function startSmokeServer() {
   child.stderr.on("data", tag);
   const ready = await httpReady(SMOKE_BASE_URL, 90_000);
   if (!ready) {
-    stopTree(child);
+    await stopTree(child);
     throw new Error(`Smoke server did not become ready at ${SMOKE_BASE_URL} within 90s.\n${log.slice(-20).join("\n")}`);
   }
   return { child, log };
 }
 
-function stopTree(child) {
-  if (child.exitCode !== null) return;
+// Terminate the whole process tree created by the gate.
+// Windows: taskkill /T /F kills the tree. POSIX: the child was spawned
+// detached (own process group), so kill(-pid) reaches every descendant.
+// Tries SIGTERM first, waits briefly, then SIGKILL. ESRCH (already gone)
+// is success. Never touches processes outside this group.
+async function stopTree(child) {
+  if (child.exitCode !== null || child.signalCode) return;
   if (isWindows) {
     spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
-  } else {
-    child.kill("SIGTERM");
-    setTimeout(() => {
-      if (child.exitCode === null) child.kill("SIGKILL");
-    }, 5000);
+    return;
   }
+  const killGroup = (signal) => {
+    try {
+      process.kill(-child.pid, signal);
+    } catch (err) {
+      if (err.code !== "ESRCH") throw err;
+    }
+  };
+  try {
+    killGroup("SIGTERM");
+  } catch {
+    return;
+  }
+  const gone = await new Promise((resolve) => {
+    const deadline = Date.now() + 5000;
+    const tick = () => {
+      if (child.exitCode !== null || child.signalCode) return resolve(true);
+      if (Date.now() >= deadline) return resolve(false);
+      setTimeout(tick, 200);
+    };
+    tick();
+  });
+  if (!gone) killGroup("SIGKILL");
+  await new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode) return resolve();
+    const onExit = () => resolve();
+    child.once("exit", onExit);
+    setTimeout(() => {
+      child.removeListener("exit", onExit);
+      resolve();
+    }, 5000);
+  });
 }
 
 const phases = [
@@ -125,7 +161,8 @@ async function runSmoke() {
   } finally {
     if (server) {
       console.log(`\nStopping smoke server (pid ${server.child.pid})...`);
-      stopTree(server.child);
+      await stopTree(server.child);
+      console.log("Smoke server stopped.");
     }
   }
 }
