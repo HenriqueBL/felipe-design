@@ -132,7 +132,7 @@ describe("not-found behavior", () => {
 
   it("unknown root page redirects to locale or 404s cleanly", async () => {
     const res = await get("/this-page-does-not-exist-smoke");
-    expect([200, 301, 302, 307, 308, 404]).toContain(res.status);
+    expect([301, 302, 307, 308, 404]).toContain(res.status);
     expect(res.status).toBeLessThan(500);
   });
 });
