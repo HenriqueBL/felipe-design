@@ -5,7 +5,7 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { getCurrentUser } from "@/services/auth";
 import {
-  createSignedDownloadUrl,
+  createSignedDownloadUrls,
   getCustomerOrderDetail,
 } from "@/services/customer-orders";
 import { formatDate, formatDateLong, formatDateTime, formatMoney } from "@/lib/format";
@@ -84,13 +84,16 @@ export default async function CustomerOrderPage({
     cancelled: dictionary.order.stateCancelled,
   };
 
-  const resultLinks = await Promise.all(
-    resultImages.map(async (image) => ({
-      id: image.id,
-      filename: image.original_filename ?? image.storage_path.split("/").pop() ?? image.id,
-      url: await createSignedDownloadUrl("order-results", image.storage_path),
-    })),
+  const resultUrls = await createSignedDownloadUrls(
+    "order-results",
+    resultImages.map((image) => image.storage_path),
   );
+
+  const resultLinks = resultImages.map((image) => ({
+    id: image.id,
+    filename: image.original_filename ?? image.storage_path.split("/").pop() ?? image.id,
+    url: resultUrls.get(image.storage_path) ?? null,
+  }));
 
   const revisionAllowed = canRequestRevision(
     order.status,
@@ -99,14 +102,17 @@ export default async function CustomerOrderPage({
   );
 
   // Source photos: thumbnails via signed URL (bucket privado client-uploads).
-  const sourcePhotoItems = await Promise.all(
-    sourceImages.map(async (image) => ({
-      id: image.id,
-      knifeIndex: image.knife_index ?? 1,
-      filename: image.original_filename ?? image.storage_path.split("/").pop() ?? image.id,
-      url: await createSignedDownloadUrl("client-uploads", image.storage_path),
-    })),
+  const sourceUrls = await createSignedDownloadUrls(
+    "client-uploads",
+    sourceImages.map((image) => image.storage_path),
   );
+
+  const sourcePhotoItems = sourceImages.map((image) => ({
+    id: image.id,
+    knifeIndex: image.knife_index ?? 1,
+    filename: image.original_filename ?? image.storage_path.split("/").pop() ?? image.id,
+    url: sourceUrls.get(image.storage_path) ?? null,
+  }));
 
   const shortId = order.id.slice(0, 8).toUpperCase();
   const showUpload = order.status !== "cancelled" && order.status !== "completed";

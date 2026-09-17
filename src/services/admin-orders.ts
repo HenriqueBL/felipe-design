@@ -15,22 +15,45 @@ export interface AdminOrderDetail {
 }
 
 // Gera signed URLs temporarias (1h) para as fotos; buckets seguem privados.
+// Uma chamada createSignedUrls por bucket em vez de N chamadas individuais.
+// Mapeamento por storage_path: falha parcial nunca associa URL errada.
 async function attachSignedUrls(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   images: OrderImageRow[],
 ): Promise<OrderImageWithUrl[]> {
-  return Promise.all(
-    images.map(async (image) => {
-      const bucket = image.kind === "source" ? "client-uploads" : "order-results";
+  if (images.length === 0) {
+    return [];
+  }
+
+  const byBucket = new Map<string, string[]>();
+  for (const image of images) {
+    const bucket = image.kind === "source" ? "client-uploads" : "order-results";
+    const paths = byBucket.get(bucket) ?? [];
+    paths.push(image.storage_path);
+    byBucket.set(bucket, paths);
+  }
+
+  const urlsByPath = new Map<string, string>();
+  await Promise.all(
+    [...byBucket.entries()].map(async ([bucket, paths]) => {
       const { data, error } = await supabase.storage
         .from(bucket)
-        .createSignedUrl(image.storage_path, 3600);
-      return {
-        ...image,
-        signedUrl: error || !data ? null : data.signedUrl,
-      };
+        .createSignedUrls(paths, 3600);
+      if (error || !data) {
+        return;
+      }
+      for (const entry of data) {
+        if (entry.path && !entry.error && entry.signedUrl) {
+          urlsByPath.set(entry.path, entry.signedUrl);
+        }
+      }
     }),
   );
+
+  return images.map((image) => ({
+    ...image,
+    signedUrl: urlsByPath.get(image.storage_path) ?? null,
+  }));
 }
 
 // RLS permite ao admin enxergar qualquer pedido; clientes so os proprios.

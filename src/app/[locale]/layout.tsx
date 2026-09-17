@@ -13,8 +13,7 @@ import {
   servicesPath,
 } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
-import { getCurrentUser } from "@/services/auth";
-import { signOutAction } from "./actions";
+import AuthNav from "@/components/auth-nav";
 import "../globals.css";
 
 export function generateStaticParams() {
@@ -77,13 +76,14 @@ export default async function LocaleLayout({
   const { locale } = await params;
   const current = resolveLocale(locale);
   const dictionary = await getDictionary(current);
-  // Fonte de verdade do header e a sessao real do Supabase (Server Component).
-  const user = await getCurrentUser();
   const year = new Date().getFullYear();
 
   return (
     <html lang={current}>
       <body>
+        <a className="skip-link" href="#main-content">
+          {dictionary.common.skipToContent}
+        </a>
         <header className="site-header">
           <div className="container">
             <Link href={homePath(current)} className="brand">
@@ -102,16 +102,10 @@ export default async function LocaleLayout({
               <Link href={aboutPath(current)}>{dictionary.nav.about}</Link>
               <Link href={galleryPath(current)}>{dictionary.nav.gallery}</Link>
               <Link href={accountPath(current)}>{dictionary.nav.account}</Link>
-              {user ? (
-                <form action={signOutAction} className="inline">
-                  <input type="hidden" name="locale" value={current} />
-                  <button type="submit" className="linklike">
-                    {dictionary.nav.logout}
-                  </button>
-                </form>
-              ) : (
-                <Link href={`/${current}/login`}>{dictionary.nav.login}</Link>
-              )}
+              <AuthNav
+                locale={current}
+                labels={{ login: dictionary.nav.login, logout: dictionary.nav.logout }}
+              />
               <div className="locale-switch">
                 <Link href="/en" aria-label="English">
                   en
@@ -123,7 +117,9 @@ export default async function LocaleLayout({
             </nav>
           </div>
         </header>
-        {children}
+        <div id="main-content" tabIndex={-1}>
+          {children}
+        </div>
         <footer className="site-footer">
           <div className="container footer-grid">
             <div className="footer-brand">

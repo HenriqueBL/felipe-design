@@ -283,6 +283,7 @@ const en = {
   },
 
   common: {
+    skipToContent: "Skip to content",
     notFound: "Page not found",
     backHome: "Back to home",
     save: "Save",
