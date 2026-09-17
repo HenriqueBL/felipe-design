@@ -506,6 +506,49 @@ describe("Payment Authority (migration 0012)", () => {
     expect(second.error!.message).toMatch(/PAYMENT_ORDER_MISMATCH/);
   });
 
+  it("14. record_payment_intent e confirm_order_payment concorrentes para o mesmo external_payment_id terminam consistentes (sem unique_violation)", async () => {
+    const { client: userClient } = await getIdentity("pa-owner");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+    const externalId = "mock_intconf_" + order.id;
+    const eventId = "evt_intconf_" + crypto.randomUUID();
+
+    const results = await Promise.all([
+      service.rpc("record_payment_intent", {
+        p_order_id: order.id,
+        p_provider: "mock",
+        p_external_payment_id: externalId,
+        p_amount_cents: order.totalCents,
+        p_currency: "BRL",
+      }),
+      service.rpc(
+        "confirm_order_payment",
+        confirmArgs(order.id, externalId, eventId, order.totalCents, "BRL"),
+      ),
+    ]);
+    for (const r of results) {
+      expect(r.error).toBeNull();
+    }
+
+    // Exatamente um payment para (provider, external_payment_id).
+    const { data: payments, error: payErr } = await service
+      .from("payments")
+      .select("id, order_id, status, amount_cents, currency")
+      .eq("provider", "mock")
+      .eq("external_payment_id", externalId);
+    if (payErr) throw new Error(payErr.message);
+    expect(payments).toHaveLength(1);
+    const payment = payments![0];
+    expect(payment).toBeDefined();
+    expect(payment!.order_id).toBe(order.id);
+    expect(payment!.status).toBe("paid");
+    expect(payment!.amount_cents).toBe(order.totalCents);
+    expect(payment!.currency).toBe("BRL");
+
+    const o = await orderRow(order.id);
+    expect(o.paid_at).not.toBeNull();
+  });
+
   it("11. cross-user: RLS impede leitura do pedido alheio e RPCs financeiras sao service_role-only", async () => {
     const a = await getIdentity("pa-owner");
     const b = await getIdentity("pa-other");
