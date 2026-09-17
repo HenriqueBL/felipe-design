@@ -10,7 +10,17 @@ e churn de auth entre execuções).
 
 - [ ] Merge ou PR de `chore/production-readiness` para `main`
 - [ ] Tag de release (ex.: `v0.3.0-preprod`) após o merge
-- [ ] CI verde em `main` (quality + integration + e2e)
+- [x] Security web hardening
+- [x] SEO technical baseline
+- [x] Frontend polish
+- [ ] Release gate local obrigatório (enquanto GitHub Actions estiver indisponível — problema de billing/account):
+  - [ ] npm test
+  - [ ] npm run lint
+  - [ ] npm run typecheck
+  - [ ] npm run build
+  - [ ] Integration
+  - [ ] E2E
+  - [ ] Smoke
 
 ## 2. Product/content
 
@@ -28,11 +38,14 @@ e churn de auth entre execuções).
 
 ## 4. Real payments
 
-- [ ] Escolher gateway (Stripe / Mercado Pago / NowPayments)
+- [ ] Escolher gateway — providers em avaliação: Stripe / Mercado Pago / Pagar.me
 - [ ] Implementar provider concreto no registry
-- [ ] Rota de webhook com verificação de assinatura
-- [ ] Amount/currency validation for real payments
-- [ ] Testes sandbox do ciclo completo
+- [ ] Rota de webhook HTTP real
+- [ ] Webhook signature verification
+- [ ] Webhook idempotency
+- [ ] Validate amount against order snapshot (dentro de `confirm_order_payment`)
+- [ ] Validate currency against order snapshot (dentro de `confirm_order_payment`)
+- [ ] Sandbox full-cycle test (intent → checkout → webhook → paid_at + fila)
 
 ## 5. Email
 
@@ -41,11 +54,13 @@ e churn de auth entre execuções).
 - [ ] Templates transacionais (magic link, confirmações)
 - [ ] SPF/DKIM/DMARC
 
-## 6. VPS/infrastructure (ou Vercel)
+## 6. VPS / production infrastructure
 
-- [ ] Provisionar ambiente de produção
+- [ ] Provisionar VPS existente do usuário como hospedagem final (em avaliação)
+- [ ] Deploy do app Next.js na VPS (PM2/Docker ou similar)
 - [ ] Env vars de produção (sem `ENABLE_MOCK_PAYMENTS`)
 - [ ] Backups/PITR habilitados no Supabase PROD
+- Nota: Vercel permanece apenas como alternativa futura, não como plano atual; Supabase continua externo (DB/Auth/Storage)
 
 ## 7. Production configuration
 

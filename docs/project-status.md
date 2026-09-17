@@ -3,7 +3,7 @@
 Atualizado em: 2026-09-17
 Branch: `chore/production-readiness`
 Última tag: `v0.2.0-mvp`
-main: `06878ba`
+main: `1e34fea`
 
 > **MVP COMPLETE != PRODUCTION READY**
 > O MVP técnico está congelado e validado, mas a produção exige decisões humanas
@@ -23,12 +23,19 @@ main: `06878ba`
 - Queue/deadline engine: TS e SQL idênticos, `FOR UPDATE` em `app_settings`, `promised_delivery_date` nunca diminui
 - Admin: dashboard protegido por middleware + RLS + guards `is_admin()` nas RPCs
 - Security hardening: RLS em todas as tabelas, `register_source_image` como única via de source insert (0010), idempotência por storage_path (0011), TUS signed uploads, signed URLs para thumbnails
+- Security Web Hardening (merge em main, `docs/web-security-hardening.md`): DONE
+- SEO technical baseline (robots.ts, sitemap.ts, site.ts — PR #4 merge `f7c6313`): DONE
+- Frontend polish (PR #5 merge `1e34fea`): DONE
 
 ## IN PROGRESS
 
-- Production smoke (testes de fumaça contra PROD ficam para a fase de deploy)
-- Visual/product completion (polish pendente de decisão/merge)
-- Deployment preparation (fase Vercel/domínio ainda não iniciada)
+- Production smoke (15/15 PASS localmente no build atual, incluindo 404 em rota inexistente; commit/push final do Smoke pendente de confirmação remota)
+- Deployment preparation (VPS existente do usuário em avaliação como hospedagem final; Supabase permanece externo para DB/Auth/Storage; Vercel deixou de ser a direção principal)
+
+## CI / Validation
+
+- GitHub Actions indisponível (problema de billing/account state)
+- Decisão: NÃO bloquear desenvolvimento/merge por Actions; validação local obrigatória antes de merge/deploy (unit, lint, typecheck, build, integration, E2E, smoke)
 
 ## BLOCKED / HUMAN DECISION
 
@@ -38,7 +45,7 @@ main: `06878ba`
 - SMTP/remetente de e-mail (SPF/DKIM/DMARC)
 - Redes sociais
 - Galeria/imagens de portfólio
-- Gateway de pagamento real (Stripe/Mercado Pago/NowPayments)
+- Gateway de pagamento real — providers em consideração: Stripe / Mercado Pago / Pagar.me (auditoria de payments concluída; bloqueadores reais: ausência de webhook HTTP real, ausência de validação amount/currency dentro de `confirm_order_payment`, provider real não escolhido)
 - Dados/configuração VPS (se aplicável à hospedagem final)
 
 ## NOT IMPLEMENTED YET
