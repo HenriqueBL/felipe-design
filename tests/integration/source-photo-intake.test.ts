@@ -184,14 +184,22 @@ describe("Source Photo Intake (migration 0008)", () => {
     return results;
   }
 
-  async function pay(client: SupabaseClient, orderId: string, amountCents = 7500) {
-    const { data, error } = await client.rpc("confirm_order_payment", {
+  // As RPCs de pagamento sao service_role-only (migration 0012): o helper
+  // le o snapshot do pedido e confirma com o valor exato.
+  async function pay(_client: SupabaseClient, orderId: string) {
+    const { data: order } = await service
+      .from("orders")
+      .select("total_cents, currency")
+      .eq("id", orderId)
+      .single();
+    if (!order) throw new Error("order not found for pay helper");
+    const { data, error } = await service.rpc("confirm_order_payment", {
       p_order_id: orderId,
       p_provider: "mock",
       p_external_payment_id: "mock_" + orderId,
       p_provider_event_id: "evt_" + crypto.randomUUID(),
-      p_amount_cents: amountCents,
-      p_currency: "BRL",
+      p_amount_cents: order.total_cents,
+      p_currency: order.currency,
     });
     if (error) throw new Error(`confirm_order_payment failed: ${error.message}`);
     return data;
