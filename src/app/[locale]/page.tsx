@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { servicesPath } from "@/lib/paths";
+import { publicPath, siteUrl } from "@/lib/site";
 
 export default async function HomePage({
   params,
@@ -12,8 +13,21 @@ export default async function HomePage({
   const current: Locale = isLocale(locale) ? locale : defaultLocale;
   const dictionary = await getDictionary(current);
 
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Felipe Design",
+    url: siteUrl() + publicPath(current, "home"),
+    description: dictionary.meta.description,
+    inLanguage: current === "pt" ? "pt-BR" : "en",
+  };
+
   return (
     <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
       <section className="hero">
         <div className="container">
           <h1>{dictionary.home.heroTitle}</h1>
