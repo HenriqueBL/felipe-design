@@ -6,6 +6,7 @@ import { CURRENCIES, resolveCurrency } from "@/domain/checkout";
 import { listActivePlans, type ActivePlan } from "@/services/plans";
 import { formatMoney } from "@/lib/format";
 import { servicesPath } from "@/lib/paths";
+import { publicPath, siteUrl } from "@/lib/site";
 import PlanSelector from "@/components/services/plan-selector";
 import type { Currency } from "@/types/database";
 
@@ -20,18 +21,33 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const current = resolve((await params).locale);
   const dictionary = await getDictionary(current);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const publicPath = current === "en" ? "/en/services" : "/pt/servicos";
+  const base = siteUrl();
+  const canonical = base + publicPath(current, "services");
 
   return {
     title: dictionary.services.title + " | Felipe Design",
     description: dictionary.services.subtitle,
     alternates: {
-      canonical: siteUrl + publicPath,
+      canonical,
       languages: {
-        en: siteUrl + "/en/services",
-        pt: siteUrl + "/pt/servicos",
+        en: base + "/en/services",
+        pt: base + "/pt/servicos",
+        "x-default": base + "/en/services",
       },
+    },
+    openGraph: {
+      type: "website",
+      siteName: "Felipe Design",
+      locale: current === "pt" ? "pt_BR" : "en_US",
+      alternateLocale: current === "pt" ? ["en_US"] : ["pt_BR"],
+      title: dictionary.services.title + " | Felipe Design",
+      description: dictionary.services.subtitle,
+      url: canonical,
+    },
+    twitter: {
+      card: "summary",
+      title: dictionary.services.title + " | Felipe Design",
+      description: dictionary.services.subtitle,
     },
   };
 }
