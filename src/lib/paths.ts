@@ -30,3 +30,11 @@ export function loginPath(locale: Locale, next?: string): string {
 export function homePath(locale: Locale): string {
   return "/" + locale;
 }
+
+export function aboutPath(locale: Locale): string {
+  return locale === "en" ? "/en/about" : "/pt/sobre";
+}
+
+export function galleryPath(locale: Locale): string {
+  return locale === "en" ? "/en/gallery" : "/pt/galeria";
+}

@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    exclude: ["tests/integration/**"],
+    exclude: ["tests/integration/**", "tests/smoke/**"],
   },
   resolve: {
     alias: {

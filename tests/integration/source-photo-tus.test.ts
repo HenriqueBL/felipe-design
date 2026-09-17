@@ -80,19 +80,14 @@ describe("TUS real upload (tus-js-client contra Storage DEV)", () => {
       .upsert({ angles: 1, active: true }, { onConflict: "angles" })
       .select("id")
       .single();
-    const today = new Date().toISOString().slice(0, 10);
-    await adminClient
-      .from("plan_prices")
-      .upsert(
-        {
-          plan_id: plan!.id,
-          currency: "BRL",
-          amount_cents: 7500,
-          valid_from: today,
-          active: true,
-        },
-        { onConflict: "plan_id,currency,valid_from" },
-      );
+    // set_plan_price closes any previous open price, keeping at most one open
+    // row per plan+currency (no accumulation across runs on different days).
+    const { error: priceErr } = await adminClient.rpc("set_plan_price", {
+      p_plan_id: plan!.id,
+      p_currency: "BRL",
+      p_amount_cents: 7500,
+    });
+    if (priceErr) throw new Error(`set_plan_price failed: ${priceErr.message}`);
 
     const { data: order, error: orderErr } = await client.rpc("create_order", {
       p_plan_id: plan!.id,

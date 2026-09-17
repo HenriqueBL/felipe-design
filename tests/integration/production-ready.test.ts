@@ -199,38 +199,18 @@ async function createFixturePlan(
     throw new Error(`Plan upsert failed: ${planErr?.message}`);
   }
 
-  // Reuse existing price or create new one
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: existingPrice } = await adminClient
-    .from("plan_prices")
-    .select("id")
-    .eq("plan_id", plan.id)
-    .eq("currency", "BRL")
-    .eq("valid_from", today)
-    .maybeSingle();
-
-  let priceId: string;
-  if (existingPrice) {
-    priceId = existingPrice.id;
-  } else {
-    const { data: price, error: priceErr } = await adminClient
-      .from("plan_prices")
-      .insert({
-        plan_id: plan.id,
-        currency: "BRL",
-        amount_cents: amountCents,
-        valid_from: today,
-        active: true,
-      })
-      .select("id")
-      .single();
-    if (priceErr || !price) {
-      throw new Error(`Price insert failed: ${priceErr?.message}`);
-    }
-    priceId = price.id;
+  // set_plan_price closes any previous open price, keeping at most one open
+  // row per plan+currency (no accumulation across runs on different days).
+  const { data: price, error: priceErr } = await adminClient.rpc("set_plan_price", {
+    p_plan_id: plan.id,
+    p_currency: "BRL",
+    p_amount_cents: amountCents,
+  });
+  if (priceErr || !price) {
+    throw new Error(`set_plan_price failed: ${priceErr?.message}`);
   }
 
-  return { planId: plan.id, priceId };
+  return { planId: plan.id, priceId: price.id };
 }
 
 // =============================================================================
@@ -335,7 +315,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    const { data: confirmed } = await userClient.rpc("confirm_order_payment", {
+    const { data: confirmed } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_" + order!.id,
@@ -361,7 +341,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
 
     // Pay first
-    await userClient.rpc("confirm_order_payment", {
+    await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_" + order!.id,
@@ -418,7 +398,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(beforePay!.promised_delivery_date).toBeNull();
 
     // Confirm payment — maybe_mark_order_ready called inside RPC
-    const { data: afterPay } = await userClient.rpc("confirm_order_payment", {
+    const { data: afterPay } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_" + order!.id,
@@ -445,7 +425,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     await registerSource(userClient, order!.id, user.userId, 1, 3);
     await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
 
-    const { data: first } = await userClient.rpc("confirm_order_payment", {
+    const { data: first } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_" + order!.id,
@@ -454,7 +434,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_currency: "BRL",
     });
 
-    const { data: second } = await userClient.rpc("confirm_order_payment", {
+    const { data: second } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_" + order!.id,
@@ -520,7 +500,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
     // Confirm payment CONCURRENTLY — both should activate without race
     const [resultA, resultB] = await Promise.all([
-      clientA.rpc("confirm_order_payment", {
+      service.rpc("confirm_order_payment", {
         p_order_id: orderA!.id,
         p_provider: "mock",
         p_external_payment_id: "mock_conc_a_" + orderA!.id,
@@ -528,7 +508,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
         p_amount_cents: 7500,
         p_currency: "BRL",
       }),
-      clientB.rpc("confirm_order_payment", {
+      service.rpc("confirm_order_payment", {
         p_order_id: orderB!.id,
         p_provider: "mock",
         p_external_payment_id: "mock_conc_b_" + orderB!.id,
@@ -562,7 +542,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
     // Fire payment confirmation and photo upload concurrently
     await Promise.all([
-      userClient.rpc("confirm_order_payment", {
+      service.rpc("confirm_order_payment", {
         p_order_id: order!.id,
         p_provider: "mock",
         p_external_payment_id: "mock_same_" + order!.id,
@@ -606,7 +586,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
     // Fire two concurrent payment confirmations (same external_payment_id)
     const [first, second] = await Promise.all([
-      userClient.rpc("confirm_order_payment", {
+      service.rpc("confirm_order_payment", {
         p_order_id: order!.id,
         p_provider: "mock",
         p_external_payment_id: "mock_dup_" + order!.id,
@@ -614,7 +594,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
         p_amount_cents: 7500,
         p_currency: "BRL",
       }),
-      userClient.rpc("confirm_order_payment", {
+      service.rpc("confirm_order_payment", {
         p_order_id: order!.id,
         p_provider: "mock",
         p_external_payment_id: "mock_dup_" + order!.id,
@@ -721,7 +701,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
       p_idempotency_key: crypto.randomUUID(),
     });
 
-    await clientA.rpc("confirm_order_payment", {
+    await service.rpc("confirm_order_payment", {
       p_order_id: orderA!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_rls_" + orderA!.id,
@@ -967,7 +947,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(order!.total_cents).toBe(7500);
 
     // 3. Confirm payment (no photos yet)
-    const { data: paid } = await userClient.rpc("confirm_order_payment", {
+    const { data: paid } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_smoke_" + order!.id,
@@ -1054,7 +1034,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(beforePay!.production_ready_at).toBeNull();
 
     // 3. Confirm payment — triggers activation
-    const { data: paid } = await userClient.rpc("confirm_order_payment", {
+    const { data: paid } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_fp_" + order!.id,
@@ -1083,7 +1063,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     });
     await registerSource(userClient, order!.id, user.userId, 1, 3);
     await userClient.rpc("submit_source_photos", { p_order_id: order!.id });
-    await userClient.rpc("confirm_order_payment", {
+    await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: "mock_res_" + order!.id,
@@ -1269,7 +1249,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
     // Etapa 1: record_payment_intent (simula createPaymentIntent do provider)
     const externalId = "mock_prov_" + order!.id;
-    const { error: intentErr } = await userClient.rpc("record_payment_intent", {
+    const { error: intentErr } = await service.rpc("record_payment_intent", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: externalId,
@@ -1279,7 +1259,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(intentErr).toBeNull();
 
     // Etapa 2: confirm_order_payment (simula webhook/evento do provider)
-    const { data: confirmed, error: confirmErr } = await userClient.rpc("confirm_order_payment", {
+    const { data: confirmed, error: confirmErr } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: externalId,
@@ -1291,7 +1271,7 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
     expect(confirmed!.paid_at).not.toBeNull();
 
     // Idempotência: segunda confirmação com mesmo external_payment_id não duplica
-    const { data: second } = await userClient.rpc("confirm_order_payment", {
+    const { data: second } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: externalId,
@@ -1375,14 +1355,14 @@ describe("Production-ready queue rule (migration 0006+0007)", () => {
 
     // 3. Mock payment via abstração (record_payment_intent + confirm_order_payment)
     const extId = "mock_smoke_full_" + order!.id;
-    await userClient.rpc("record_payment_intent", {
+    await service.rpc("record_payment_intent", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: extId,
       p_amount_cents: 7500,
       p_currency: "BRL",
     });
-    const { data: paid } = await userClient.rpc("confirm_order_payment", {
+    const { data: paid } = await service.rpc("confirm_order_payment", {
       p_order_id: order!.id,
       p_provider: "mock",
       p_external_payment_id: extId,

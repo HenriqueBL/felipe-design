@@ -111,27 +111,14 @@ async function createFixturePlan(
     .single();
   if (planErr || !plan) throw new Error(`Plan upsert failed: ${planErr?.message}`);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: existingPrice } = await adminClient
-    .from("plan_prices")
-    .select("id")
-    .eq("plan_id", plan.id)
-    .eq("currency", "BRL")
-    .eq("valid_from", today)
-    .maybeSingle();
-
-  if (existingPrice) return plan.id;
-
-  const { error: priceErr } = await adminClient
-    .from("plan_prices")
-    .insert({
-      plan_id: plan.id,
-      currency: "BRL",
-      amount_cents: 7500,
-      valid_from: today,
-      active: true,
-    });
-  if (priceErr) throw new Error(`Price insert failed: ${priceErr.message}`);
+  // set_plan_price closes any previous open price, keeping at most one open
+  // row per plan+currency (no accumulation across runs on different days).
+  const { error: priceErr } = await adminClient.rpc("set_plan_price", {
+    p_plan_id: plan.id,
+    p_currency: "BRL",
+    p_amount_cents: 7500,
+  });
+  if (priceErr) throw new Error(`set_plan_price failed: ${priceErr.message}`);
   return plan.id;
 }
 
@@ -184,14 +171,22 @@ describe("Source Photo Intake (migration 0008)", () => {
     return results;
   }
 
-  async function pay(client: SupabaseClient, orderId: string, amountCents = 7500) {
-    const { data, error } = await client.rpc("confirm_order_payment", {
+  // As RPCs de pagamento sao service_role-only (migration 0012): o helper
+  // le o snapshot do pedido e confirma com o valor exato.
+  async function pay(_client: SupabaseClient, orderId: string) {
+    const { data: order } = await service
+      .from("orders")
+      .select("total_cents, currency")
+      .eq("id", orderId)
+      .single();
+    if (!order) throw new Error("order not found for pay helper");
+    const { data, error } = await service.rpc("confirm_order_payment", {
       p_order_id: orderId,
       p_provider: "mock",
       p_external_payment_id: "mock_" + orderId,
       p_provider_event_id: "evt_" + crypto.randomUUID(),
-      p_amount_cents: amountCents,
-      p_currency: "BRL",
+      p_amount_cents: order.total_cents,
+      p_currency: order.currency,
     });
     if (error) throw new Error(`confirm_order_payment failed: ${error.message}`);
     return data;
