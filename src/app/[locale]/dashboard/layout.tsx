@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
+
+export const metadata: Metadata = {
+  title: "Dashboard | Felipe Design",
+  robots: { index: false, follow: false },
+};
 
 export default async function DashboardLayout({
   children,
