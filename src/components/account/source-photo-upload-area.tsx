@@ -509,12 +509,6 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                   <p className="note">{labels.errors.tooMany(0)}</p>
                 ) : !submitted ? (
                   <div>
-                    <label
-                      className="btn btn-secondary"
-                      htmlFor={headingId + "-file-" + knifeIndex}
-                    >
-                      {labels.choose}
-                    </label>
                     <input
                       ref={(el) => {
                         fileInputs.current[knifeIndex] = el;
@@ -533,6 +527,12 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                           : "")
                       }
                     />
+                    <label
+                      className="btn btn-secondary"
+                      htmlFor={headingId + "-file-" + knifeIndex}
+                    >
+                      {labels.choose}
+                    </label>
                   </div>
                 ) : null}
                 {knifeNotice[knifeIndex] ? (
