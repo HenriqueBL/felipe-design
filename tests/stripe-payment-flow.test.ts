@@ -94,6 +94,28 @@ function emptyPaymentsQuery() {
   };
 }
 
+// payments query returning prior rows, com contagem coerente para a
+// idempotency key derivada (checkout_{orderId}_{count}).
+function priorPaymentsQuery(rows: { external_payment_id: string; status: string }[]) {
+  // O mesmo builder precisa satisfazer dois usos: countPriorStripePayments
+  // aguarda select().eq().eq() diretamente (thenable), e a decisao usa
+  // .order().limit().
+  const thenable = {
+    then: (resolve: (v: { data: unknown[]; error: null; count: number }) => void) =>
+      resolve({ data: [], error: null, count: rows.length }),
+    order: () => ({
+      limit: vi.fn(async () => ({ data: rows, error: null })),
+    }),
+  };
+  return {
+    select: () => ({
+      eq: () => ({
+        eq: () => thenable,
+      }),
+    }),
+  };
+}
+
 describe("startStripeCheckout (server-side authority)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -197,22 +219,7 @@ describe("startStripeCheckout (server-side authority)", () => {
   });
 
   it("sessao open existente e reutilizada sem criar nova", async () => {
-    const query = {
-      select: () => ({
-        eq: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: vi.fn(async () => ({
-                data: [{ external_payment_id: "cs_test_open", status: "pending" }],
-                error: null,
-              })),
-            }),
-            select: vi.fn(async () => ({ data: [], error: null, count: 1 })),
-          }),
-        }),
-      }),
-    };
-    adminFrom.mockImplementation(() => query);
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_test_open", status: "pending" }]));
     providerMock.retrieveCheckoutSession.mockResolvedValue({
       status: "open",
       url: "https://checkout.stripe.com/c/pay/cs_test_open",
@@ -221,6 +228,65 @@ describe("startStripeCheckout (server-side authority)", () => {
     const result = await startStripeCheckout(ORDER_ID, "en");
     expect(result.checkoutUrl).toContain("cs_test_open");
     expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  // TESTE CRITICO 1: webhook lag — sessao complete+paid, DB pending,
+  // paid_at null. NAO criar segunda sessao cobravel.
+  it("sessao complete+paid com DB pending: PAYMENT_CONFIRMATION_PENDING e nenhuma nova sessao", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockResolvedValue({
+      status: "complete",
+      payment_status: "paid",
+    });
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_CONFIRMATION_PENDING",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  // TESTE CRITICO 2: complete+unpaid (metodo assincrono) — nao criar nova.
+  it("sessao complete+unpaid com DB pending: PAYMENT_PROCESSING e nenhuma nova sessao", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockResolvedValue({
+      status: "complete",
+      payment_status: "unpaid",
+    });
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_PROCESSING",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  // TESTE CRITICO 3: payment row failed nao bloqueia nova sessao.
+  it("payment DB failed: tentativa anterior nao bloqueia; nova sessao com nova idempotency key", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "failed" }]));
+    providerMock.createPaymentIntent.mockClear();
+
+    const result = await startStripeCheckout(ORDER_ID, "en");
+    expect(result.checkoutUrl).toContain("cs_test_1");
+    expect(providerMock.createPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(providerMock.createPaymentIntent.mock.calls[0]![0].idempotencyKey).toBe(
+      "checkout_" + ORDER_ID + "_1",
+    );
+    expect(providerMock.retrieveCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  // TESTE CRITICO 4: sessao expirada permite nova sessao.
+  it("sessao expirada: nova sessao criada com nova idempotency key", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockResolvedValue({
+      status: "expired",
+      payment_status: "unpaid",
+    });
+
+    const result = await startStripeCheckout(ORDER_ID, "en");
+    expect(result.checkoutUrl).toContain("cs_test_1");
+    expect(providerMock.createPaymentIntent.mock.calls[0]![0].idempotencyKey).toBe(
+      "checkout_" + ORDER_ID + "_1",
+    );
   });
 });
 
@@ -312,6 +378,68 @@ describe("stripe webhook route", () => {
   it("evento sem dados financeiros completos nao confirma (200, sem RPC)", async () => {
     providerMock.parseWebhookEvent.mockResolvedValue(
       makeStripeEvent({ amountCents: undefined, currency: undefined, orderId: undefined }),
+    );
+
+    const response = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    expect(response.status).toBe(200);
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  // TESTE CRITICO 5: async_payment_failed persiste failed via RPC; nao paga.
+  it("evento failed persiste record_payment_failure e NAO chama confirm_order_payment", async () => {
+    providerMock.parseWebhookEvent.mockResolvedValue(
+      makeStripeEvent({ status: "failed" }),
+    );
+    adminRpc.mockResolvedValue({ data: {}, error: null });
+
+    const response = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    expect(response.status).toBe(200);
+    expect(adminRpc).toHaveBeenCalledWith("record_payment_failure", {
+      p_order_id: ORDER_ID,
+      p_provider: "stripe",
+      p_external_payment_id: "cs_test_1",
+      p_provider_event_id: "evt_1",
+    });
+    expect(adminRpc).not.toHaveBeenCalledWith("confirm_order_payment", expect.anything());
+  });
+
+  // TESTE CRITICO 6: replay do evento failed e idempotente na RPC (200).
+  it("replay do evento failed e idempotente (200, sem erro)", async () => {
+    providerMock.parseWebhookEvent.mockResolvedValue(
+      makeStripeEvent({ status: "failed" }),
+    );
+    adminRpc.mockResolvedValue({ data: {}, error: null });
+
+    const first = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    const second = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(adminRpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("evento failed com erro de persistencia retorna 500 para retry", async () => {
+    providerMock.parseWebhookEvent.mockResolvedValue(
+      makeStripeEvent({ status: "failed" }),
+    );
+    adminRpc.mockResolvedValue({ data: null, error: { message: "PAYMENT_NOT_FOUND" } });
+
+    const response = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    expect(response.status).toBe(500);
+  });
+
+  it("evento failed sem order reference: 200 com log, sem RPC", async () => {
+    providerMock.parseWebhookEvent.mockResolvedValue(
+      makeStripeEvent({ status: "failed", orderId: undefined }),
+    );
+
+    const response = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));
+    expect(response.status).toBe(200);
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  it("evento processing (completed unpaid) e 200 sem tocar RPCs", async () => {
+    providerMock.parseWebhookEvent.mockResolvedValue(
+      makeStripeEvent({ status: "processing" }),
     );
 
     const response = await stripeWebhook(makeRequest("{}", { "stripe-signature": "ok" }));

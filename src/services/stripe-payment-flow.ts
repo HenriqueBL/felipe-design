@@ -21,6 +21,22 @@ interface StartCheckoutResult {
   checkoutUrl: string;
 }
 
+// Decisao sobre uma tentativa de checkout anterior: nunca criar uma nova
+// Checkout Session enquanto uma tentativa anterior puder ser cobrada.
+// - reuse: sessao open => devolver a MESMA URL
+// - confirmation_pending: complete + paid => pago na Stripe, DB ainda
+//   confirmando (webhook lag)
+// - payment_processing: complete + unpaid com pagamento DB pendente
+// - retry_allowed: expirado/inacessivel
+// - none: sem tentativas anteriores
+// - failed: pagamento DB terminou como failed
+type ExistingCheckoutDecision =
+  | { kind: "reuse"; checkoutUrl: string }
+  | { kind: "confirmation_pending" }
+  | { kind: "payment_processing" }
+  | { kind: "retry_allowed" }
+  | { kind: "none" };
+
 function siteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL;
   if (!raw) {
@@ -81,11 +97,19 @@ export async function startStripeCheckout(
 
   const admin = createSupabaseAdminClient();
 
-  // Reuso de sessao: se ja existe um pagamento Stripe pendente para o pedido
-  // com sessao ainda open, devolve a mesma URL em vez de criar nova cobranca.
-  const reusable = await findReusableOpenSession(provider, admin, order.id);
-  if (reusable) {
-    return { checkoutUrl: reusable };
+  // Reuso/bloqueio de sessao: consulta pagamentos Stripe anteriores e o
+  // estado real da Checkout Session na Stripe. Nunca cria nova cobranca
+  // enquanto uma tentativa anterior for cobravel (open) ou o pagamento
+  // estiver em confirmacao/processamento.
+  const decision = await decideExistingCheckout(provider, admin, order.id);
+  if (decision.kind === "reuse") {
+    return { checkoutUrl: decision.checkoutUrl };
+  }
+  if (decision.kind === "confirmation_pending") {
+    throw new StripePaymentFlowError("PAYMENT_CONFIRMATION_PENDING");
+  }
+  if (decision.kind === "payment_processing") {
+    throw new StripePaymentFlowError("PAYMENT_PROCESSING");
   }
 
   // Apos expiry (ou sessao inacessivel), a nova tentativa precisa de uma
@@ -133,12 +157,16 @@ async function countPriorStripePayments(
   return count;
 }
 
-async function findReusableOpenSession(
+// Decide o que fazer com as tentativas anteriores de checkout do pedido.
+// Combina payments.status (DB) com o status real da Checkout Session na
+// Stripe — orders.paid_at e apenas o fast path inicial, nao suficiente
+// durante webhook lag.
+async function decideExistingCheckout(
   provider: StripePaymentProvider,
   admin: ReturnType<typeof createSupabaseAdminClient>,
   orderId: string,
-): Promise<string | null> {
-  const { data: pending, error } = await admin
+): Promise<ExistingCheckoutDecision> {
+  const { data: prior, error } = await admin
     .from("payments")
     .select("external_payment_id, status")
     .eq("order_id", orderId)
@@ -146,14 +174,17 @@ async function findReusableOpenSession(
     .order("created_at", { ascending: false })
     .limit(5);
 
-  if (error || !pending || pending.length === 0) {
-    return null;
+  if (error || !prior || prior.length === 0) {
+    return { kind: "none" };
   }
 
-  for (const payment of pending) {
-    if (payment.status === "paid") {
+  for (const payment of prior) {
+    // paid ja deveria ter setado paid_at (fast path acima); failed e
+    // terminalmente nao-pagavel: ambos nao bloqueiam nova sessao.
+    if (payment.status === "paid" || payment.status === "failed") {
       continue;
     }
+
     let session;
     try {
       session = await provider.retrieveCheckoutSession(payment.external_payment_id);
@@ -162,11 +193,23 @@ async function findReusableOpenSession(
       // key derivada do pedido, e o Stripe reconcilia por essa chave.
       continue;
     }
+
     if (session.status === "open" && session.url) {
-      return session.url;
+      return { kind: "reuse", checkoutUrl: session.url };
     }
+    if (session.status === "complete") {
+      if (session.payment_status === "paid") {
+        // Pagamento ja ocorreu na Stripe; webhook pode estar atrasado.
+        // Nunca criar nova cobranca nesta janela.
+        return { kind: "confirmation_pending" };
+      }
+      // complete + unpaid: metodo assincrono possivelmente em processamento.
+      // Bloqueia enquanto o pagamento DB estiver pendente/processing.
+      return { kind: "payment_processing" };
+    }
+    // expired (ou outro estado terminal nao-pagavel): retry permitido.
   }
-  return null;
+  return { kind: "none" };
 }
 
 function toFlowErrorCode(message: string | undefined): string {

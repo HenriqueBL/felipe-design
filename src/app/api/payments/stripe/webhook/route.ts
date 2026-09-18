@@ -55,7 +55,39 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Internal Server Error", { status: 500 });
   }
 
-  // Evento irrelevante (status nao-pago): ignora sem tocar o DB financeiro.
+  const admin = createSupabaseAdminClient();
+
+  // Evento de falha terminal (async_payment_failed / expired): persiste via
+  // RPC autoritativa; replay e idempotente no DB. Nunca toca orders.paid_at.
+  if (event.status === "failed") {
+    if (event.orderId && event.externalPaymentId) {
+      const { error: failureError } = await admin.rpc("record_payment_failure", {
+        p_order_id: event.orderId,
+        p_provider: event.provider,
+        p_external_payment_id: event.externalPaymentId,
+        p_provider_event_id: event.eventId,
+      });
+      if (failureError) {
+        // Falha ao persistir: 5xx para o Stripe reenviar (estado terminal
+        // pendente de persistencia e mais seguro que descartar).
+        console.error("[stripe-webhook] failure persistence rejected", {
+          provider: "stripe",
+          eventId: event.eventId,
+        });
+        return new Response("Internal Server Error", { status: 500 });
+      }
+    } else {
+      // Falha sem referencia ao pedido: anomalia logada sem dados sensiveis.
+      console.error("[stripe-webhook] failed event missing order reference", {
+        provider: "stripe",
+        eventId: event.eventId,
+      });
+    }
+    return Response.json({ received: true });
+  }
+
+  // Evento irrelevante (ex: completed unpaid, ainda processando): 200 sem
+  // tocar o DB financeiro.
   if (event.status !== "paid") {
     return Response.json({ received: true });
   }
@@ -68,10 +100,19 @@ export async function POST(request: Request): Promise<Response> {
     event.amountCents <= 0 ||
     !event.currency
   ) {
+    // Sessao criada pelo nosso sistema com evento paid sem dados financeiros
+    // e anomalia: log estruturado sem secrets/payload bruto; nao confirma.
+    // 200 (nao 5xx): reenvios nao mudariam o payload; descarta com rastreio.
+    console.error("[stripe-webhook] paid event missing financial data", {
+      provider: "stripe",
+      eventId: event.eventId,
+      hasOrderId: Boolean(event.orderId),
+      hasAmount: typeof event.amountCents === "number",
+      hasCurrency: Boolean(event.currency),
+    });
     return Response.json({ received: true });
   }
 
-  const admin = createSupabaseAdminClient();
   const { error } = await admin.rpc("confirm_order_payment", {
     p_order_id: event.orderId,
     p_provider: event.provider,

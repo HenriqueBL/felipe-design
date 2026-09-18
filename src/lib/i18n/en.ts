@@ -112,6 +112,8 @@ const en = {
     paying: "Redirecting to checkout...",
     paymentError: "Payment could not be started. Please try again.",
     paymentUnavailable: "Online payments are temporarily unavailable.",
+    paymentConfirmationPending: "Your payment was received and is being confirmed. Please wait a moment.",
+    paymentProcessing: "Your payment is still being processed. Please wait a moment.",
     paymentSubmitted: "Payment submitted. Confirmation may take a moment.",
     paymentCancelled: "Payment was cancelled. You can try again at any time.",
     planLabel: "Plan",

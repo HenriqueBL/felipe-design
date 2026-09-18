@@ -35,12 +35,23 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
 - Idempotency key deterministica: `checkout_{orderId}_{n}`, onde `n` e o
   numero de pagamentos Stripe anteriores do pedido. Cliques duplos/concorrentes
   comparam na MESMA chave: o Stripe devolve a mesma sessao.
-- Reuso: ao clicar Pay novamente, o servico busca pagamentos Stripe pendentes,
-  recupera a Checkout Session e devolve a URL se `status=open`.
-- `status=complete` + `payment_status=paid`: a acao retorna
-  `PAYMENT_ALREADY_COMPLETED` (order.paid_at ja bloqueia antes).
-- `status=expired` ou sessao inacessivel: nova tentativa com nova chave
-  (`_n+1`).
+- `orders.paid_at` e o fast path inicial: pedido ja confirmado retorna
+  `PAYMENT_ALREADY_COMPLETED` sem consultar a Stripe. So isso NAO basta
+  durante webhook lag: a Checkout Session tambem e consultada.
+- Reuso: ao clicar Pay novamente, o servico consulta pagamentos Stripe
+  anteriores (payments.status + retrieve da Checkout Session):
+  - `payments.status = paid` ou `failed`: nao bloqueia (paid teria setado
+    `paid_at`; failed e terminalmente nao-pagavel).
+  - sessao `status=open`: devolve a MESMA URL (reuse).
+  - sessao `complete` + `payment_status=paid`: pagamento ja ocorreu na
+    Stripe mas o DB ainda nao confirmou (webhook lag). Retorna
+    `PAYMENT_CONFIRMATION_PENDING`; nenhuma segunda sessao e criada durante
+    essa janela.
+  - sessao `complete` + `payment_status=unpaid` com pagamento DB
+    pending/processing: metodo assincrono em processamento. Retorna
+    `PAYMENT_PROCESSING`; nenhuma segunda sessao e criada.
+  - sessao `expired` ou inacessivel: retry permitido com nova chave
+    (`_n+1`).
 - `record_payment_intent` serializa via `SELECT ... FOR UPDATE` no pedido.
 
 ## Webhook
@@ -60,9 +71,17 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
 
 ## Nao-paid behavior
 
-Eventos failed/expired nao alteram `payments.status` (exigiria nova RPC —
-documentado como follow-up, sem migration). Nenhum redirect de success
-confirma pagamento; a pagina mostra apenas "payment submitted".
+Eventos `async_payment_failed` e `expired` persistem `payments.status='failed'`
+via RPC `record_payment_failure` (migration 0015): SECURITY DEFINER,
+service_role only, idempotente por `(provider, provider_event_id)`, valida que
+o pagamento pertence ao pedido informado, nunca rebaixa `paid`/`refunded`,
+nunca altera amount/currency e nunca toca `orders.paid_at`. Falha de
+persistencia retorna 500 (Stripe reenvia). Eventos failed sem referencia ao
+pedido: log estruturado sem secrets e 200. Eventos paid sem dados financeiros
+completos: anomalia logada (sem payload bruto), sem confirmacao, 200.
+`checkout.session.completed` + unpaid permanece pending/processing (sem RPC).
+Nenhum redirect de success confirma pagamento; a pagina mostra apenas
+"payment submitted".
 
 ## Configuracao manual (ACCOUNT ACTION REQUIRED)
 
