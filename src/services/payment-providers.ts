@@ -8,6 +8,11 @@ export interface CreatePaymentIntentInput {
   currency: Currency;
   successUrl: string;
   cancelUrl: string;
+  /**
+   * Chave de idempotencia do provedor para esta tentativa. Ausente = o
+   * provedor decide (provider Stripe usa chave derivada do orderId).
+   */
+  idempotencyKey?: string;
 }
 
 export interface PaymentIntentResult {
@@ -21,6 +26,15 @@ export interface ProviderWebhookEvent {
   eventId: string;
   externalPaymentId: string;
   status: WebhookPaymentStatus;
+  /**
+   * Valor reportado pelo provedor no evento (nao do snapshot do pedido).
+   * Ausente quando o evento nao carrega informacao financeira.
+   */
+  amountCents?: number;
+  /** Moeda reportada pelo provedor, em formato interno (BRL/USD). */
+  currency?: Currency;
+  /** Referencia ao pedido presente no objeto do provedor. */
+  orderId?: string;
   metadata: Record<string, unknown>;
 }
 

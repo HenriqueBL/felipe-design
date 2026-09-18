@@ -12,6 +12,12 @@ const required = [
   "NEXT_PUBLIC_SITE_URL",
 ];
 
+if (isProduction) {
+  // Hosted Checkout server-side: os dois secrets Stripe sao obrigatorios
+  // em producao (publishable key nao e necessaria — sem Stripe.js no browser).
+  required.push("STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET");
+}
+
 const errors = [];
 
 for (const name of required) {
@@ -39,6 +45,16 @@ if (anonKey && !/^[A-Za-z0-9_-]{100,}$/.test(anonKey.trim())) {
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (serviceKey && !/^[A-Za-z0-9_-]{100,}$/.test(serviceKey.trim())) {
   errors.push("Invalid format for SUPABASE_SERVICE_ROLE_KEY (expected a Supabase JWT)");
+}
+
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (stripeSecretKey && !/^sk_(test|live)_/.test(stripeSecretKey.trim())) {
+  errors.push("Invalid format for STRIPE_SECRET_KEY (expected sk_test_... or sk_live_...)");
+}
+
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+if (stripeWebhookSecret && !/^whsec_/.test(stripeWebhookSecret.trim())) {
+  errors.push("Invalid format for STRIPE_WEBHOOK_SECRET (expected whsec_...)");
 }
 
 if (isProduction && process.env.ENABLE_MOCK_PAYMENTS === "true") {

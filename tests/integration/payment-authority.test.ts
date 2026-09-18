@@ -564,3 +564,253 @@ describe("Payment Authority (migration 0012)", () => {
     expect(o.paid_at).toBeNull();
   });
 });
+
+describe("Payment Failure Authority (migration 0015: record_payment_failure)", () => {
+  let service: SupabaseClient;
+  let adminClient: SupabaseClient;
+  const createdUserIds: string[] = [];
+
+  const identityCache = new Map<
+    string,
+    { user: FixtureUser; client: SupabaseClient }
+  >();
+  async function getIdentity(prefix: string) {
+    let cached = identityCache.get(prefix);
+    if (!cached) {
+      const user = await createFixtureUser(service, prefix);
+      createdUserIds.push(user.userId);
+      cached = { user, client: await signInUser(user.email, user.password) };
+      identityCache.set(prefix, cached);
+    }
+    return cached;
+  }
+
+  async function createOrder(
+    client: SupabaseClient,
+    planId: string,
+  ): Promise<{ id: string; totalCents: number; currency: string }> {
+    const { data: order, error } = await client.rpc("create_order", {
+      p_plan_id: planId,
+      p_knife_quantity: 1,
+      p_currency: "BRL",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error || !order) {
+      throw new Error(`create_order failed: ${error?.message}`);
+    }
+    return {
+      id: order.id,
+      totalCents: order.total_cents,
+      currency: order.currency,
+    };
+  }
+
+  async function paymentRow(externalId: string) {
+    const { data, error } = await service
+      .from("payments")
+      .select("id, order_id, status, amount_cents, currency")
+      .eq("provider", "stripe")
+      .eq("external_payment_id", externalId)
+      .single();
+    if (error || !data) throw new Error(`payment select failed: ${error.message}`);
+    return data;
+  }
+
+  async function orderRow(orderId: string) {
+    const { data, error } = await service
+      .from("orders")
+      .select("paid_at")
+      .eq("id", orderId)
+      .single();
+    if (error || !data) throw new Error(`order select failed: ${error.message}`);
+    return data;
+  }
+
+  beforeAll(async () => {
+    service = createServiceClient();
+    const adminFixture = await createFixtureUser(service, "pfa-admin");
+    createdUserIds.push(adminFixture.userId);
+    const { error } = await service
+      .from("profiles")
+      .update({ role: "admin" })
+      .eq("id", adminFixture.userId);
+    if (error) throw new Error(`promote failed: ${error.message}`);
+    adminClient = await signInUser(adminFixture.email, adminFixture.password);
+  });
+
+  afterAll(async () => {
+    for (const userId of createdUserIds) {
+      try {
+        await service.auth.admin.deleteUser(userId);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  });
+
+  it("1. authenticated chamando record_payment_failure diretamente recebe permission denied", async () => {
+    const { client: userClient } = await getIdentity("pfa-owner");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+
+    const { error } = await userClient.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: "cs_pfa_denied_" + order.id,
+      p_provider_event_id: "evt_pfa_denied_" + crypto.randomUUID(),
+    });
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/permission denied/i);
+  });
+
+  it("2. async_payment_failed persiste failed e o pedido NAO vira paid", async () => {
+    const { client: userClient } = await getIdentity("pfa-owner2");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+    const externalId = "cs_pfa_fail_" + order.id;
+    const eventId = "evt_pfa_fail_" + crypto.randomUUID();
+
+    // Intent registrado (simula sessao criada pelo nosso fluxo).
+    const { error: intentErr } = await service.rpc("record_payment_intent", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_amount_cents: order.totalCents,
+      p_currency: "BRL",
+    });
+    expect(intentErr).toBeNull();
+
+    const { error } = await service.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_provider_event_id: eventId,
+    });
+    expect(error).toBeNull();
+
+    const payment = await paymentRow(externalId);
+    expect(payment.status).toBe("failed");
+    expect(payment.order_id).toBe(order.id);
+    expect(payment.amount_cents).toBe(order.totalCents);
+    expect(payment.currency).toBe("BRL");
+
+    const o = await orderRow(order.id);
+    expect(o.paid_at).toBeNull();
+  });
+
+  it("3. replay do mesmo evento failed e idempotente (segunda chamada sem erro, sem efeito duplicado)", async () => {
+    const { client: userClient } = await getIdentity("pfa-owner3");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+    const externalId = "cs_pfa_replay_" + order.id;
+    const eventId = "evt_pfa_replay_" + crypto.randomUUID();
+
+    await service.rpc("record_payment_intent", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_amount_cents: order.totalCents,
+      p_currency: "BRL",
+    });
+
+    const first = await service.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_provider_event_id: eventId,
+    });
+    expect(first.error).toBeNull();
+
+    const second = await service.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_provider_event_id: eventId,
+    });
+    expect(second.error).toBeNull();
+
+    const payment = await paymentRow(externalId);
+    expect(payment.status).toBe("failed");
+  });
+
+  it("4. evento failed com payment de outro pedido recebe PAYMENT_ORDER_MISMATCH e nao muta", async () => {
+    const a = await getIdentity("pfa-a");
+    const b = await getIdentity("pfa-b");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const orderA = await createOrder(a.client, planId);
+    const orderB = await createOrder(b.client, planId);
+    const externalIdB = "cs_pfa_cross_" + orderB.id;
+
+    await service.rpc("record_payment_intent", {
+      p_order_id: orderB.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalIdB,
+      p_amount_cents: orderB.totalCents,
+      p_currency: "BRL",
+    });
+
+    // Evento failed cita o pagamento de B mas com order_id de A.
+    const { error } = await service.rpc("record_payment_failure", {
+      p_order_id: orderA.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalIdB,
+      p_provider_event_id: "evt_pfa_cross_" + crypto.randomUUID(),
+    });
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/PAYMENT_ORDER_MISMATCH/);
+
+    const paymentB = await paymentRow(externalIdB);
+    expect(paymentB.status).toBe("pending");
+    expect(paymentB.order_id).toBe(orderB.id);
+  });
+
+  it("5. evento failed NUNCA rebaixa pagamento paid para failed", async () => {
+    const { client: userClient } = await getIdentity("pfa-owner4");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+    const externalId = "cs_pfa_paid_" + order.id;
+
+    // Confirma pagamento primeiro.
+    const { error: confirmErr } = await service.rpc("confirm_order_payment", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_provider_event_id: "evt_pfa_confirm_" + crypto.randomUUID(),
+      p_amount_cents: order.totalCents,
+      p_currency: "BRL",
+    });
+    expect(confirmErr).toBeNull();
+
+    // Evento failed tardio (ex: expired apos confirmacao por outro caminho).
+    const { error } = await service.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: externalId,
+      p_provider_event_id: "evt_pfa_late_" + crypto.randomUUID(),
+    });
+    expect(error).toBeNull();
+
+    const payment = await paymentRow(externalId);
+    expect(payment.status).toBe("paid");
+    expect(payment.amount_cents).toBe(order.totalCents);
+    expect(payment.currency).toBe("BRL");
+
+    const o = await orderRow(order.id);
+    expect(o.paid_at).not.toBeNull();
+  });
+
+  it("6. payment inexistente recebe PAYMENT_NOT_FOUND", async () => {
+    const { client: userClient } = await getIdentity("pfa-owner5");
+    const planId = await createFixturePlan(adminClient, 1, 7500);
+    const order = await createOrder(userClient, planId);
+
+    const { error } = await service.rpc("record_payment_failure", {
+      p_order_id: order.id,
+      p_provider: "stripe",
+      p_external_payment_id: "cs_pfa_ghost_" + crypto.randomUUID(),
+      p_provider_event_id: "evt_pfa_ghost_" + crypto.randomUUID(),
+    });
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/PAYMENT_NOT_FOUND/);
+  });
+});

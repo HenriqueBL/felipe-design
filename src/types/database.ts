@@ -373,6 +373,15 @@ export type Database = {
         };
         Returns: PaymentRow;
       };
+      record_payment_failure: {
+        Args: {
+          p_order_id: string;
+          p_provider: PaymentProviderId;
+          p_external_payment_id: string;
+          p_provider_event_id: string;
+        };
+        Returns: PaymentRow;
+      };
       confirm_order_payment: {
         Args: {
           p_order_id: string;
