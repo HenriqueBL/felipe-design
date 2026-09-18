@@ -1,0 +1,46 @@
+# docker-compose.prod.yml — production deploy foundation for Felipe Design on a VPS.
+#
+# Usage (on the VPS, after .env.production is filled in):
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Conventions:
+# - Public port bound only to 127.0.0.1:<port>; the external nginx reverse
+#   proxy terminates HTTPS and forwards to it. Set the port via APP_PORT.
+# - env_file: .env.production — NEVER committed to Git.
+# - APP_IMAGE: image with explicit SHA tag (no floating tags like "latest").
+#   Set via VPS environment or .env, e.g. felipe-design:25b7c99
+# - read_only + tmpfs: the Next standalone app is stateless and does not
+#   write to disk (uploads go to Supabase Storage). If writable paths are
+#   ever needed, add an explicit volume here and document it.
+
+services:
+  app:
+    image: ${APP_IMAGE:?Set APP_IMAGE to an explicit image:tag with SHA}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
