@@ -37,6 +37,10 @@ somente em runtime via `env_file: .env.production`.
 ### Runtime-only (secrets)
 
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only, runtime.
+- `STRIPE_SECRET_KEY` — server-only, runtime (formato `sk_test_...` ou
+  `sk_live_...`). Nunca Docker ARG; nunca NEXT_PUBLIC.
+- `STRIPE_WEBHOOK_SECRET` — server-only, runtime (formato `whsec_...`).
+  Nunca Docker ARG; nunca NEXT_PUBLIC.
 - `ENABLE_MOCK_PAYMENTS` — deve estar ausente ou `false` em PROD
   (guard no `scripts/validate-production-env.mjs` e no ENTRYPOINT).
 
@@ -47,6 +51,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<jwt>
 SUPABASE_SERVICE_ROLE_KEY=<jwt>
 NEXT_PUBLIC_SITE_URL=https://<dominio>
+STRIPE_SECRET_KEY=<stripe-secret-key>
+STRIPE_WEBHOOK_SECRET=<stripe-webhook-signing-secret>
 APP_IMAGE=felipe-design:<sha>
 APP_PORT=3000
 # ENABLE_MOCK_PAYMENTS omitido
@@ -62,8 +68,8 @@ corretamente).
 ## Fluxo de deploy
 
 1. **Tag/release SHA**: decide o SHA exato (merge para `main` + tag opcional).
-2. **Release gate PASS**: `npm run lint`, `npm run typecheck`, `npm test`,
-   `npm run build` verdes no CI.
+2. **Release gate PASS** (local): lint, typecheck, unit, build, Integration,
+   E2E e Smoke conforme o gate final definido para o projeto.
 3. **Backup pré-deploy** (ver docs/backup-and-restore.md): pg_dump + sync
    de Storage.
 4. **Env validation** na VPS:

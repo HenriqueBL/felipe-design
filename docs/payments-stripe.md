@@ -71,7 +71,9 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
   `stripe.webhooks.constructEvent` usando `STRIPE_WEBHOOK_SECRET`.
 - Eventos tratados: `checkout.session.completed` (paid somente se
   `payment_status === "paid"`), `async_payment_succeeded` (paid),
-  `async_payment_failed` e `expired` (nao-pago, ignorados).
+  `async_payment_failed` (=> failed) e `checkout.session.expired`
+  (=> failed), persistidos via `record_payment_failure`; nao confirmam
+  `orders.paid_at`.
 - Reconciliacao: `client_reference_id` E `metadata.order_id`; divergencia
   rejeita o evento. Amount ausente/invalido, currency nao-BRL/USD ou order
   ausente: nao confirma (200, ignorado).

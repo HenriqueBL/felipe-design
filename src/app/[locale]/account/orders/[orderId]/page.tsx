@@ -198,20 +198,33 @@ export default async function CustomerOrderPage({
         <section className="estimate-panel">
           <h2>{dictionary.order.statusTitle}</h2>
           <p className="note">{stateLabels[state]}</p>
-          <StripePaymentButton
-            locale={current}
-            orderId={order.id}
-            labels={{
-              pay: dictionary.order.paySecurely,
-              paying: dictionary.order.paying,
-              error: dictionary.order.paymentError,
-              unavailable: dictionary.order.paymentUnavailable,
-              confirmationPending: dictionary.order.paymentConfirmationPending,
-              processing: dictionary.order.paymentProcessing,
-              statusUnavailable: dictionary.order.paymentStatusUnavailable,
-            }}
-            startPayment={startStripePaymentAction}
-          />
+          {isMockPaymentsEnabled() ? (
+            <MockPaymentForm
+              locale={current}
+              orderId={order.id}
+              labels={{
+                simulate: dictionary.order.simulatePayment,
+                simulating: dictionary.order.simulating,
+                disabled: dictionary.order.mockDisabled,
+                error: dictionary.common.error,
+              }}
+            />
+          ) : (
+            <StripePaymentButton
+              locale={current}
+              orderId={order.id}
+              labels={{
+                pay: dictionary.order.paySecurely,
+                paying: dictionary.order.paying,
+                error: dictionary.order.paymentError,
+                unavailable: dictionary.order.paymentUnavailable,
+                confirmationPending: dictionary.order.paymentConfirmationPending,
+                processing: dictionary.order.paymentProcessing,
+                statusUnavailable: dictionary.order.paymentStatusUnavailable,
+              }}
+              startPayment={startStripePaymentAction}
+            />
+          )}
           {paymentStatus === "cancelled" ? (
             <p className="note">{dictionary.order.paymentCancelled}</p>
           ) : null}
