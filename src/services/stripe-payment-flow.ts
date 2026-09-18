@@ -27,16 +27,13 @@ interface StartCheckoutResult {
 // - confirmation_pending: complete + paid => pago na Stripe, DB ainda
 //   confirmando (webhook lag); OU payment row paid com paid_at null
 // - payment_processing: complete + unpaid com pagamento DB pendente
-// - status_unavailable: estado anterior nao pode ser verificado com
-//   confianca (erro de DB ou erro de retrieve) => fail closed
-// - retry_allowed: sem tentativas anteriores que possam ser cobradas
-// - none: sem tentativas anteriores
+// - none: nenhuma tentativa anterior cobravel (explicit expired/failed
+//   simplesmente continuam o loop ate terminar em none)
 type ExistingCheckoutDecision =
   | { kind: "reuse"; checkoutUrl: string }
   | { kind: "confirmation_pending" }
   | { kind: "payment_processing" }
   | { kind: "status_unavailable" }
-  | { kind: "retry_allowed" }
   | { kind: "none" };
 
 function siteUrl(): string {
@@ -117,7 +114,9 @@ export async function startStripeCheckout(
     throw new StripePaymentFlowError("PAYMENT_STATUS_UNAVAILABLE");
   }
 
-  // Apos expiry (ou sessao inacessivel), a nova tentativa precisa de uma
+  // Somente chega aqui quando todas as tentativas anteriores sao
+  // comprovadamente terminalmente nao-pagaveis (explicit expired na Stripe
+  // ou failed no DB) ou nao existem. A nova tentativa precisa de uma
   // idempotency key distinta: indexada pelo numero de pagamentos anteriores
   // do mesmo pedido, deterministica sob concorrencia (o INSERT do
   // record_payment_intent serializa por FOR UPDATE na mesma ordem).
