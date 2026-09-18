@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # Felipe Design — Next.js 15 production image (standalone output).
-# Segredos NUNCA entram no build: NEXT_PUBLIC_* são runtime-arg-safe via
-# runtime env, SUPABASE_SERVICE_ROLE_KEY entra apenas em runtime.
+# NEXT_PUBLIC_* são valores públicos: passados como build args e exportados
+# como ENV no stage de build (precisam existir durante `next build`).
+# Secrets server-only (ex.: SUPABASE_SERVICE_ROLE_KEY) NUNCA entram como
+# build args — são fornecidos apenas em runtime.
 # Ver docs/production-deploy.md (build-time vs runtime).
 
 FROM node:20-alpine AS deps
