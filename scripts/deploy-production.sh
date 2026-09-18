@@ -23,7 +23,18 @@ git rev-parse --verify "$SHA^{commit}" >/dev/null 2>&1 \
   || { echo "ERROR: $SHA is not a valid git commit"; exit 1; }
 
 echo "==> Building image"
-git archive "$SHA" | docker build -t "$IMAGE" -
+# Extrai SOMENTE as vars NEXT_PUBLIC permitidas do .env.production e passa
+# como build args públicos (necessárias durante `next build`). Nenhum secret
+# nunca é passado ao docker build.
+read_env_value() {
+  grep -E "^${1}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- | tr -d '\r' || true
+}
+PUBLIC_BUILD_ARGS=(
+  --build-arg "NEXT_PUBLIC_SUPABASE_URL=$(read_env_value NEXT_PUBLIC_SUPABASE_URL)"
+  --build-arg "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(read_env_value NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+  --build-arg "NEXT_PUBLIC_SITE_URL=$(read_env_value NEXT_PUBLIC_SITE_URL)"
+)
+git archive "$SHA" | docker build "${PUBLIC_BUILD_ARGS[@]}" -t "$IMAGE" -
 
 echo "==> Validating env (names only, never values)"
 docker run --rm --env-file "$ENV_FILE" -e NODE_ENV=production "$IMAGE" \

@@ -25,16 +25,11 @@ DNS, Cloudflare e nginx real ainda não configurados: use placeholders
 
 Fluxo seguro adotado (evita secret em layers/build args):
 
-1. O Dockerfile NÃO recebe NEXT_PUBLIC via ARG. O app é tolerante a build
-   com essas vars vazias para server-side; o **server standalone lê-as em
-   runtime** para rotas server (CSP, site URL).
-2. Para código client que dependa dos valores, faça o build na VPS via
-   `scripts/deploy-production.sh` com `--env-file .env.production` no
-   `docker build` — execute o build com env real injetado:
-
-   Atualize o script antes do primeiro deploy real se o client bundle
-   precisar dos valores (documentado aqui de propósito; teste com
-   `NEXT_PUBLIC_*` definidos durante build e verifique o bundle).
+1. `scripts/deploy-production.sh` extrai SOMENTE as três vars
+   `NEXT_PUBLIC_*` de `.env.production` (parser controlado, sem
+   `source`) e as passa ao `docker build` como `--build-arg` públicos.
+2. O build stage do Dockerfile as recebe via `ARG`/`ENV` antes do
+   `next build`, então o client bundle já sai com os valores corretos.
 
 NUNCA passe `SUPABASE_SERVICE_ROLE_KEY` como Docker build arg — ela entra
 somente em runtime via `env_file: .env.production`.
@@ -58,8 +53,11 @@ APP_PORT=3000
 ```
 
 Validação fail-fast: `node scripts/validate-production-env.mjs` (erro
-contém apenas NOME da variável, nunca valor). Roda como ENTRYPOINT do
-container — container morre imediatamente sem env crítica.
+contém apenas NOME da variável, nunca valor). Roda como parte do
+ENTRYPOINT (`scripts/docker-entrypoint.sh`): se a validação falha o
+container morre imediatamente; se passa, o entrypoint faz
+`exec node server.js` e o Node vira o processo principal (recebe sinais
+corretamente).
 
 ## Fluxo de deploy
 
