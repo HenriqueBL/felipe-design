@@ -7,7 +7,7 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
     // Verify main navigation links exist and point to correct EN paths
-    const nav = page.locator("nav, header");
+    const nav = page.locator("nav.site-nav");
     await expect(nav.getByRole("link", { name: /services/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /sign in/i })).toBeVisible();
   });
@@ -18,7 +18,7 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "pt");
 
     // Verify main navigation links exist and point to correct PT paths
-    const nav = page.locator("nav, header");
+    const nav = page.locator("nav.site-nav");
     await expect(nav.getByRole("link", { name: /serviços/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /entrar/i })).toBeVisible();
   });
