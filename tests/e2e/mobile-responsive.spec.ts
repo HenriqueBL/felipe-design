@@ -143,10 +143,18 @@ test.describe("Mobile Responsiveness E2E", () => {
     await expect(page.locator("main")).toBeVisible();
     await assertNoHorizontalOverflow(page);
 
-    // Upload area (if visible) should be usable
-    const uploadInput = page.locator('input[type="file"]');
+    // Upload area (if visible) should be usable. The file input is visually
+    // hidden by design (1px) for accessibility; the tap target is the
+    // associated label styled as a button.
+    const uploadInput = page.locator('input[type="file"]').first();
     if (await uploadInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const box = await uploadInput.boundingBox();
+      const inputId = await uploadInput.getAttribute("id");
+      expect(inputId).toBeTruthy();
+
+      const uploadLabel = page.locator(`label[for="${inputId}"]`);
+      await expect(uploadLabel).toBeVisible();
+
+      const box = await uploadLabel.boundingBox();
       expect(box).toBeTruthy();
       expect(box!.width).toBeGreaterThan(50); // Should have reasonable tap target
     }
