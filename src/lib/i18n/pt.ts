@@ -114,6 +114,7 @@ const pt: Dictionary = {
     paying: "Redirecionando para o pagamento...",
     paymentError: "Não foi possível iniciar o pagamento. Tente novamente.",
     paymentUnavailable: "Pagamentos online estão temporariamente indisponíveis.",
+    paymentStatusUnavailable: "Não foi possível verificar o status do seu pagamento anterior. Aguarde um momento e tente novamente.",
     paymentConfirmationPending: "Seu pagamento foi recebido e está sendo confirmado. Aguarde um momento.",
     paymentProcessing: "Seu pagamento ainda está sendo processado. Aguarde um momento.",
     paymentSubmitted: "Pagamento enviado. A confirmação pode levar alguns instantes.",

@@ -25,15 +25,17 @@ interface StartCheckoutResult {
 // Checkout Session enquanto uma tentativa anterior puder ser cobrada.
 // - reuse: sessao open => devolver a MESMA URL
 // - confirmation_pending: complete + paid => pago na Stripe, DB ainda
-//   confirmando (webhook lag)
+//   confirmando (webhook lag); OU payment row paid com paid_at null
 // - payment_processing: complete + unpaid com pagamento DB pendente
-// - retry_allowed: expirado/inacessivel
+// - status_unavailable: estado anterior nao pode ser verificado com
+//   confianca (erro de DB ou erro de retrieve) => fail closed
+// - retry_allowed: sem tentativas anteriores que possam ser cobradas
 // - none: sem tentativas anteriores
-// - failed: pagamento DB terminou como failed
 type ExistingCheckoutDecision =
   | { kind: "reuse"; checkoutUrl: string }
   | { kind: "confirmation_pending" }
   | { kind: "payment_processing" }
+  | { kind: "status_unavailable" }
   | { kind: "retry_allowed" }
   | { kind: "none" };
 
@@ -111,6 +113,9 @@ export async function startStripeCheckout(
   if (decision.kind === "payment_processing") {
     throw new StripePaymentFlowError("PAYMENT_PROCESSING");
   }
+  if (decision.kind === "status_unavailable") {
+    throw new StripePaymentFlowError("PAYMENT_STATUS_UNAVAILABLE");
+  }
 
   // Apos expiry (ou sessao inacessivel), a nova tentativa precisa de uma
   // idempotency key distinta: indexada pelo numero de pagamentos anteriores
@@ -166,32 +171,38 @@ async function decideExistingCheckout(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   orderId: string,
 ): Promise<ExistingCheckoutDecision> {
+  // Fail closed: sem evidencia positiva do estado anterior, NUNCA criar
+  // nova Checkout Session. Erro de DB significa status indisponivel, nao
+  // ausencia de tentativas.
   const { data: prior, error } = await admin
     .from("payments")
     .select("external_payment_id, status")
     .eq("order_id", orderId)
     .eq("provider", "stripe")
-    .order("created_at", { ascending: false })
-    .limit(5);
+    .order("created_at", { ascending: false });
 
-  if (error || !prior || prior.length === 0) {
-    return { kind: "none" };
+  if (error || !prior) {
+    return { kind: "status_unavailable" };
   }
 
   for (const payment of prior) {
-    // paid ja deveria ter setado paid_at (fast path acima); failed e
-    // terminalmente nao-pagavel: ambos nao bloqueiam nova sessao.
-    if (payment.status === "paid" || payment.status === "failed") {
+    // failed e terminalmente nao-pagavel: nao bloqueia nova sessao.
+    if (payment.status === "failed") {
       continue;
+    }
+    // paid no DB com paid_at null: confirmacao/reconciliacao pendente
+    // (inconsistencia temporaria/legada). NUNCA criar nova cobranca.
+    if (payment.status === "paid") {
+      return { kind: "confirmation_pending" };
     }
 
     let session;
     try {
       session = await provider.retrieveCheckoutSession(payment.external_payment_id);
     } catch {
-      // Sessao removida/inacessivel: continua; nova sessao usara a idempotency
-      // key derivada do pedido, e o Stripe reconcilia por essa chave.
-      continue;
+      // Erro de retrieve (API, timeout, indisponibilidade) NAO prova que a
+      // sessao anterior expirou. Fail closed.
+      return { kind: "status_unavailable" };
     }
 
     if (session.status === "open" && session.url) {
@@ -207,7 +218,13 @@ async function decideExistingCheckout(
       // Bloqueia enquanto o pagamento DB estiver pendente/processing.
       return { kind: "payment_processing" };
     }
-    // expired (ou outro estado terminal nao-pagavel): retry permitido.
+    if (session.status === "expired") {
+      // Explicitamente terminalmente nao-pagavel: esta tentativa pode ser
+      // ignorada; continuar avaliando as demais.
+      continue;
+    }
+    // Estado inesperado/nao comprovado: fail closed.
+    return { kind: "status_unavailable" };
   }
   return { kind: "none" };
 }

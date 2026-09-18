@@ -9,6 +9,7 @@ export interface StripePaymentButtonLabels {
   unavailable: string;
   confirmationPending: string;
   processing: string;
+  statusUnavailable: string;
 }
 
 interface StartPaymentResult {
@@ -59,13 +60,15 @@ export default function StripePaymentButton({
   const message =
     errorCode === "CONFIGURATION"
       ? labels.unavailable
-      : errorCode === "PAYMENT_CONFIRMATION_PENDING"
-        ? labels.confirmationPending
-        : errorCode === "PAYMENT_PROCESSING"
-          ? labels.processing
-          : errorCode
-            ? labels.error
-            : null;
+      : errorCode === "PAYMENT_STATUS_UNAVAILABLE"
+        ? labels.statusUnavailable
+        : errorCode === "PAYMENT_CONFIRMATION_PENDING"
+          ? labels.confirmationPending
+          : errorCode === "PAYMENT_PROCESSING"
+            ? labels.processing
+            : errorCode
+              ? labels.error
+              : null;
 
   return (
     <div>

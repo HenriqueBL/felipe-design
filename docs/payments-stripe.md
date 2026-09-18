@@ -39,9 +39,14 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
   `PAYMENT_ALREADY_COMPLETED` sem consultar a Stripe. So isso NAO basta
   durante webhook lag: a Checkout Session tambem e consultada.
 - Reuso: ao clicar Pay novamente, o servico consulta pagamentos Stripe
-  anteriores (payments.status + retrieve da Checkout Session):
-  - `payments.status = paid` ou `failed`: nao bloqueia (paid teria setado
-    `paid_at`; failed e terminalmente nao-pagavel).
+  anteriores (payments.status + retrieve da Checkout Session). A decisao e
+  FAIL CLOSED: nova Checkout Session somente quando nenhuma tentativa
+  anterior puder ser cobrada, com prova positiva:
+  - erro no lookup de payments: `PAYMENT_STATUS_UNAVAILABLE`; NUNCA libera
+    nova cobranca (erro de DB nao significa ausencia de tentativas).
+  - `payments.status = paid` (mesmo com `paid_at` null): confirmacao/
+    reconciliacao pendente => `PAYMENT_CONFIRMATION_PENDING`; BLOQUEIA.
+  - `payments.status = failed`: terminalmente nao-pagavel; nao bloqueia.
   - sessao `status=open`: devolve a MESMA URL (reuse).
   - sessao `complete` + `payment_status=paid`: pagamento ja ocorreu na
     Stripe mas o DB ainda nao confirmou (webhook lag). Retorna
@@ -50,8 +55,14 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
   - sessao `complete` + `payment_status=unpaid` com pagamento DB
     pending/processing: metodo assincrono em processamento. Retorna
     `PAYMENT_PROCESSING`; nenhuma segunda sessao e criada.
-  - sessao `expired` ou inacessivel: retry permitido com nova chave
-    (`_n+1`).
+  - erro de retrieve da sessao (API, timeout, indisponibilidade,
+    configuracao): `PAYMENT_STATUS_UNAVAILABLE`; fail closed. Erro de
+    retrieve NAO prova que a sessao anterior expirou.
+  - status inesperado/nao comprovado: fail closed.
+  - sessao `expired` (explicito): a unica liberacao de retry alem de
+    `failed` no DB ou ausencia de tentativas. Nova chave (`_n+1`).
+- Todas as tentativas relevantes sao consultadas (sem LIMIT arbitrario);
+  a decisao cobre QUALQUER tentativa anterior ainda cobravel.
 - `record_payment_intent` serializa via `SELECT ... FOR UPDATE` no pedido.
 
 ## Webhook

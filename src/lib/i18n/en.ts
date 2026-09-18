@@ -112,6 +112,7 @@ const en = {
     paying: "Redirecting to checkout...",
     paymentError: "Payment could not be started. Please try again.",
     paymentUnavailable: "Online payments are temporarily unavailable.",
+    paymentStatusUnavailable: "We couldn't verify your previous payment status. Please wait a moment and try again.",
     paymentConfirmationPending: "Your payment was received and is being confirmed. Please wait a moment.",
     paymentProcessing: "Your payment is still being processed. Please wait a moment.",
     paymentSubmitted: "Payment submitted. Confirmation may take a moment.",

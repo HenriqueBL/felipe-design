@@ -82,8 +82,11 @@ function emptyPaymentsQuery() {
     select: () => ({
       eq: () => ({
         eq: () => ({
+          then: (resolve: (v: { data: unknown[]; error: null; count: number }) => void) =>
+            resolve({ data: [], error: null, count: 0 }),
           order: () => ({
-            limit: vi.fn(async () => ({ data: [], error: null })),
+            then: (resolve: (v: { data: unknown[]; error: null }) => void) =>
+              resolve({ data: [], error: null }),
           }),
           select: vi.fn(() => ({
             eq: vi.fn(async () => ({ data: [], error: null, count: 0 })),
@@ -99,18 +102,36 @@ function emptyPaymentsQuery() {
 function priorPaymentsQuery(rows: { external_payment_id: string; status: string }[]) {
   // O mesmo builder precisa satisfazer dois usos: countPriorStripePayments
   // aguarda select().eq().eq() diretamente (thenable), e a decisao usa
-  // .order().limit().
-  const thenable = {
-    then: (resolve: (v: { data: unknown[]; error: null; count: number }) => void) =>
-      resolve({ data: [], error: null, count: rows.length }),
-    order: () => ({
-      limit: vi.fn(async () => ({ data: rows, error: null })),
-    }),
-  };
+  // .order() seguido de await.
   return {
     select: () => ({
       eq: () => ({
-        eq: () => thenable,
+        eq: () => ({
+          then: (resolve: (v: { data: unknown[]; error: null; count: number }) => void) =>
+            resolve({ data: [], error: null, count: rows.length }),
+          order: () => ({
+            then: (resolve: (v: { data: unknown[]; error: null }) => void) =>
+              resolve({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+}
+
+// payments query que FALHA no lookup do DB (decisao de tentativas anteriores).
+function failingPaymentsQuery() {
+  return {
+    select: () => ({
+      eq: () => ({
+        eq: () => ({
+          then: (resolve: (v: { data: unknown[]; error: null; count: number }) => void) =>
+            resolve({ data: [], error: null, count: 0 }),
+          order: () => ({
+            then: (resolve: (v: { data: null; error: { message: string } }) => void) =>
+              resolve({ data: null, error: { message: "db unavailable" } }),
+          }),
+        }),
       }),
     }),
   };
@@ -274,7 +295,7 @@ describe("startStripeCheckout (server-side authority)", () => {
     expect(providerMock.retrieveCheckoutSession).not.toHaveBeenCalled();
   });
 
-  // TESTE CRITICO 4: sessao expirada permite nova sessao.
+  // TESTE CRITICO 4: sessao expirada explicitamente permite nova sessao.
   it("sessao expirada: nova sessao criada com nova idempotency key", async () => {
     adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
     providerMock.retrieveCheckoutSession.mockResolvedValue({
@@ -287,6 +308,102 @@ describe("startStripeCheckout (server-side authority)", () => {
     expect(providerMock.createPaymentIntent.mock.calls[0]![0].idempotencyKey).toBe(
       "checkout_" + ORDER_ID + "_1",
     );
+  });
+
+  // TESTE A: erro no lookup do DB de payments => FAIL CLOSED.
+  it("erro no lookup de payments: PAYMENT_STATUS_UNAVAILABLE, sem nova cobranca", async () => {
+    adminFrom.mockImplementation(() => failingPaymentsQuery());
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_STATUS_UNAVAILABLE",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  // TESTE B: payment row paid com paid_at null => confirmacao pendente.
+  it("payment DB paid com order unpaid: PAYMENT_CONFIRMATION_PENDING, sem nova cobranca", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "paid" }]));
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_CONFIRMATION_PENDING",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+    expect(providerMock.retrieveCheckoutSession).not.toHaveBeenCalled();
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  // TESTE C: retrieve error (PROVIDER_UNAVAILABLE) => FAIL CLOSED.
+  it("retrieve PROVIDER_UNAVAILABLE: PAYMENT_STATUS_UNAVAILABLE, sem nova cobranca", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockRejectedValue(new MockStripeError("PROVIDER_UNAVAILABLE"));
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_STATUS_UNAVAILABLE",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+    expect(adminRpc).not.toHaveBeenCalled();
+  });
+
+  // TESTE D: retrieve error (CONFIGURATION) => FAIL CLOSED.
+  it("retrieve CONFIGURATION: nenhuma nova cobranca", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockRejectedValue(new MockStripeError("CONFIGURATION"));
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_STATUS_UNAVAILABLE",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  // TESTE E: status Stripe inesperado => FAIL CLOSED.
+  it("status Stripe inesperado: nenhuma nova cobranca", async () => {
+    adminFrom.mockImplementation(() => priorPaymentsQuery([{ external_payment_id: "cs_1", status: "pending" }]));
+    providerMock.retrieveCheckoutSession.mockResolvedValue({ status: "weird_state" });
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_STATUS_UNAVAILABLE",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  // TESTE I-1: uma expired + uma open => reuse da open, sem nova cobranca.
+  it("multiplas tentativas (expired + open): reuse da open, ordem nao reduz seguranca", async () => {
+    adminFrom.mockImplementation(() =>
+      priorPaymentsQuery([
+        { external_payment_id: "cs_expired", status: "pending" },
+        { external_payment_id: "cs_open", status: "pending" },
+      ]),
+    );
+    providerMock.retrieveCheckoutSession.mockImplementation(async (id: string) =>
+      id === "cs_expired"
+        ? { status: "expired", payment_status: "unpaid" }
+        : { status: "open", url: "https://checkout.stripe.com/c/pay/cs_open" },
+    );
+
+    const result = await startStripeCheckout(ORDER_ID, "en");
+    expect(result.checkoutUrl).toContain("cs_open");
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  // TESTE I-2: uma failed + uma complete+paid => confirmacao pendente.
+  it("multiplas tentativas (failed + complete+paid): confirmacao pendente", async () => {
+    adminFrom.mockImplementation(() =>
+      priorPaymentsQuery([
+        { external_payment_id: "cs_failed", status: "failed" },
+        { external_payment_id: "cs_paid", status: "pending" },
+      ]),
+    );
+    providerMock.retrieveCheckoutSession.mockImplementation(async (id: string) =>
+      id === "cs_failed"
+        ? { status: "expired", payment_status: "unpaid" }
+        : { status: "complete", payment_status: "paid" },
+    );
+
+    await expect(startStripeCheckout(ORDER_ID, "en")).rejects.toMatchObject({
+      code: "PAYMENT_CONFIRMATION_PENDING",
+    });
+    expect(providerMock.createPaymentIntent).not.toHaveBeenCalled();
   });
 });
 

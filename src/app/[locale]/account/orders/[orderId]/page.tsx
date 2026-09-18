@@ -208,6 +208,7 @@ export default async function CustomerOrderPage({
               unavailable: dictionary.order.paymentUnavailable,
               confirmationPending: dictionary.order.paymentConfirmationPending,
               processing: dictionary.order.paymentProcessing,
+              statusUnavailable: dictionary.order.paymentStatusUnavailable,
             }}
             startPayment={startStripePaymentAction}
           />
