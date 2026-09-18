@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+
+# Felipe Design — Next.js 15 production image (standalone output).
+# NEXT_PUBLIC_* são valores públicos: passados como build args e exportados
+# como ENV no stage de build (precisam existir durante `next build`).
+# Secrets server-only (ex.: SUPABASE_SERVICE_ROLE_KEY) NUNCA entram como
+# build args — são fornecidos apenas em runtime.
+# Ver docs/production-deploy.md (build-time vs runtime).
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+FROM node:20-alpine AS build
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* precisam existir DURANTE o next build para entrarem no
+# client bundle. Passadas pelo deploy script como build args públicos
+# (lidas de .env.production). NUNCA passar secrets como build arg.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+RUN addgroup -S nodejs -g 1001 && adduser -S nextjs -u 1001
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Validação fail-fast de env de produção (nomes apenas, nunca valores),
+# seguida do exec do CMD (server.js) com o Node como processo principal.
+COPY --from=build --chown=nextjs:nodejs /app/scripts/validate-production-env.mjs ./scripts/validate-production-env.mjs
+COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
+RUN chmod +x /app/scripts/docker-entrypoint.sh
+USER nextjs
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health/live').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
+CMD ["node", "server.js"]
