@@ -19,7 +19,9 @@ import { accountPath } from "@/lib/paths";
 import OrderSteps from "@/components/account/order-steps";
 import SourcePhotoUploadArea from "@/components/account/source-photo-upload-area";
 import MockPaymentForm from "@/components/account/mock-payment-form";
+import StripePaymentButton from "@/components/account/stripe-payment-button";
 import RevisionForm from "@/components/account/revision-form";
+import { startStripePaymentAction } from "@/app/[locale]/account/stripe-payment";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,10 +45,17 @@ export async function generateMetadata({
 
 export default async function CustomerOrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; orderId: string }>;
+  searchParams: Promise<{ payment?: string }>;
 }) {
   const { locale, orderId } = await params;
+  const paymentStatus = (await searchParams).payment === "success"
+    ? "success"
+    : (await searchParams).payment === "cancelled"
+      ? "cancelled"
+      : null;
   const current = resolve(locale);
   const dictionary = await getDictionary(current);
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
@@ -189,18 +198,30 @@ export default async function CustomerOrderPage({
         <section className="estimate-panel">
           <h2>{dictionary.order.statusTitle}</h2>
           <p className="note">{stateLabels[state]}</p>
-          {isMockPaymentsEnabled() ? (
-            <MockPaymentForm
-              locale={current}
-              orderId={order.id}
-              labels={{
-                simulate: dictionary.order.simulatePayment,
-                simulating: dictionary.order.simulating,
-                disabled: dictionary.order.mockDisabled,
-                error: dictionary.common.error,
-              }}
-            />
+          <StripePaymentButton
+            locale={current}
+            orderId={order.id}
+            labels={{
+              pay: dictionary.order.paySecurely,
+              paying: dictionary.order.paying,
+              error: dictionary.order.paymentError,
+              unavailable: dictionary.order.paymentUnavailable,
+            }}
+            startPayment={startStripePaymentAction}
+          />
+          {paymentStatus === "cancelled" ? (
+            <p className="note">{dictionary.order.paymentCancelled}</p>
           ) : null}
+        </section>
+      ) : null}
+
+      {paymentStatus === "success" ? (
+        <section className="estimate-panel">
+          <p className="note">
+            {order.paid_at !== null
+              ? dictionary.order.paymentSimulated
+              : dictionary.order.paymentSubmitted}
+          </p>
         </section>
       ) : null}
 
