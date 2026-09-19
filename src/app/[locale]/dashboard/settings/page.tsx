@@ -25,6 +25,13 @@ export default async function DashboardSettingsPage({
     stripeStatus = null;
   }
 
+  // Compute on the server: the dictionary hint is a function, which is not
+  // serializable across the Server -> Client boundary.
+  const stripeSecretKeyHint =
+    stripeStatus?.secretKeyConfigured && stripeStatus.secretKeyLast4
+      ? dictionary.dashboard.stripeSecretKeyHint(stripeStatus.secretKeyLast4)
+      : "";
+
   return (
     <div>
       <h1>{dictionary.dashboard.settingsTitle}</h1>
@@ -57,7 +64,7 @@ export default async function DashboardSettingsPage({
             modeLive: dictionary.dashboard.stripeModeLive,
             secretKey: dictionary.dashboard.stripeSecretKey,
             webhookSecret: dictionary.dashboard.stripeWebhookSecret,
-            secretKeyHint: dictionary.dashboard.stripeSecretKeyHint,
+            secretKeyHint: stripeSecretKeyHint,
             webhookConfigured: dictionary.dashboard.stripeWebhookConfigured,
             notConfigured: dictionary.dashboard.stripeNotConfigured,
             leaveBlankToKeep: dictionary.dashboard.stripeLeaveBlankToKeep,
