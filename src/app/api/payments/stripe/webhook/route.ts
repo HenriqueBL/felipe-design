@@ -4,9 +4,11 @@ import {
   StripePaymentError,
   getStripePaymentProvider,
 } from "@/services/stripe-payment";
+import { markStripeWebhookVerified } from "@/services/stripe-config";
 
 // Webhook publico do Stripe: autenticacao exclusivamente pela assinatura
-// (Stripe-Signature + STRIPE_WEBHOOK_SECRET). O raw body e lido UMA vez,
+// (Stripe-Signature + webhook signing secret configurado pelo Admin no
+// Supabase Vault). O raw body e lido UMA vez,
 // antes de qualquer parse. Somente POST; sem auth cookie.
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,7 @@ export async function POST(request: Request): Promise<Response> {
 
   let provider;
   try {
-    provider = getStripePaymentProvider();
+    provider = await getStripePaymentProvider();
   } catch (error) {
     if (error instanceof StripePaymentError) {
       // Configuracao ausente no servidor: nunca expoe o secret.
@@ -54,6 +56,10 @@ export async function POST(request: Request): Promise<Response> {
     console.error("[stripe-webhook] unexpected parse failure");
     return new Response("Internal Server Error", { status: 500 });
   }
+
+  // Assinatura verificada com sucesso: unica prova real de que o segredo
+  // do webhook corresponde ao endpoint Stripe. Best-effort, sem secrets.
+  await markStripeWebhookVerified();
 
   const admin = createSupabaseAdminClient();
 

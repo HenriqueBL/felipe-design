@@ -81,7 +81,7 @@ export async function startStripeCheckout(
 
   let provider: StripePaymentProvider;
   try {
-    provider = getStripePaymentProvider();
+    provider = await getStripePaymentProvider();
   } catch (error) {
     if (error instanceof StripePaymentError) {
       throw new StripePaymentFlowError(error.code);
