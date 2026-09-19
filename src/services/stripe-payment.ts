@@ -242,24 +242,28 @@ function mapCheckoutSession(
   };
 }
 
-let cachedProvider: StripePaymentProvider | null = null;
-
-// Singleton server-side: inicializacao lazy para nao exigir credenciais no
-// build CI. Erro de configuracao so acontece quando a funcionalidade roda.
-export function getStripePaymentProvider(): StripePaymentProvider {
-  if (cachedProvider) {
-    return cachedProvider;
-  }
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secretKey || !webhookSecret) {
+// Provider construido sob demanda a partir da configuracao server-side
+// (Supabase Vault via getStripeRuntimeConfiguration). Inicializacao lazy:
+// o app inicia normalmente com Stripe NOT CONFIGURED; o erro so ocorre
+// quando a funcionalidade roda. Sem singleton permanente: uma configuracao
+// salva pelo Admin passa a valer sem restart (cache curto no modulo de
+// configuracao, invalidado no update).
+export async function getStripePaymentProvider(): Promise<StripePaymentProvider> {
+  // Dynamic import: mantem o modulo da classe desacoplado do cliente
+  // Supabase (testes unitarios do provider nao dependem de storage).
+  const { getStripeRuntimeConfiguration } = await import("./stripe-config");
+  const config = await getStripeRuntimeConfiguration();
+  if (!config) {
     throw new StripePaymentError("CONFIGURATION");
   }
-  const stripe = new Stripe(secretKey);
-  cachedProvider = new StripePaymentProvider({ stripe, secretKey, webhookSecret });
-  return cachedProvider;
+  const stripe = new Stripe(config.secretKey);
+  return new StripePaymentProvider({
+    stripe,
+    secretKey: config.secretKey,
+    webhookSecret: config.webhookSecret,
+  });
 }
 
 export function resetStripePaymentProviderCacheForTests(): void {
-  cachedProvider = null;
+  void import("./stripe-config").then((m) => m.resetStripeRuntimeCacheForTests());
 }

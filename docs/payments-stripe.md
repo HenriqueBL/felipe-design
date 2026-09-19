@@ -16,14 +16,29 @@ autoritativa acontece SOMENTE via webhook assinado, chamando
 - Webhook: `POST /api/payments/stripe/webhook` (publico, signature-only)
 - UI: `src/components/account/stripe-payment-button.tsx`
 
-## Env vars
+## Configuration
 
-- `STRIPE_SECRET_KEY` (server-only; nunca NEXT_PUBLIC)
-- `STRIPE_WEBHOOK_SECRET` (server-only)
-- `NEXT_PUBLIC_SITE_URL` (base para success/cancel URLs)
+As credenciais Stripe NÃO vêm mais de `.env`: são configuradas pelo Admin em
+`/{locale}/dashboard/settings` (seção Stripe Payments) e armazenadas
+server-side no **Supabase Vault** (cifradas; migration 0016). O app lê a
+configuração via RPCs SECURITY DEFINER exclusivas do `service_role`
+(`get_stripe_runtime_config` / `get_stripe_admin_status` /
+`update_stripe_config`).
 
-Inicializacao lazy: build passa sem credenciais; erro `CONFIGURATION` so
-ocorre quando a funcionalidade e executada.
+- Secret key + webhook signing secret: Vault (nunca plaintext em tabela,
+  nunca no browser, nunca em logs)
+- A UI Admin recebe apenas: mode, flags configured e `secret_key_last4`
+- Campos de senha vazios = preservar o segredo atual; nunca são
+  pré-preenchidos com o valor armazenado
+- `NEXT_PUBLIC_SITE_URL` (env, base para success/cancel URLs)
+
+Inicializacao lazy: o app inicia com Stripe NOT CONFIGURED; erro
+`CONFIGURATION` so ocorre quando a funcionalidade e executada (checkout ou
+webhook: 503 seguro). Configuração salva pelo Admin passa a valer sem restart
+(cache de 10s, invalidado no update).
+
+- Provider config: `src/services/stripe-config.ts`
+- Storage: `supabase/migrations/0016_admin_stripe_configuration.sql`
 
 ## External payment ID
 
@@ -68,7 +83,8 @@ reconciliado no `confirm_order_payment`. Nunca PaymentIntent ID.
 ## Webhook
 
 - Raw body lido UMA vez antes de qualquer parse; assinatura verificada com
-  `stripe.webhooks.constructEvent` usando `STRIPE_WEBHOOK_SECRET`.
+  `stripe.webhooks.constructEvent` usando o webhook signing secret
+  configurado pelo Admin (Supabase Vault, server-side).
 - Eventos tratados: `checkout.session.completed` (paid somente se
   `payment_status === "paid"`), `async_payment_succeeded` (paid),
   `async_payment_failed` (=> failed) e `checkout.session.expired`
@@ -96,15 +112,24 @@ completos: anomalia logada (sem payload bruto), sem confirmacao, 200.
 Nenhum redirect de success confirma pagamento; a pagina mostra apenas
 "payment submitted".
 
-## Configuracao manual (ACCOUNT ACTION REQUIRED)
+## Configuracao pelo Admin (ACCOUNT ACTION REQUIRED)
 
 1. Criar/confirmar conta Stripe (TEST mode)
-2. Obter test secret key -> `STRIPE_SECRET_KEY`
+2. Obter test secret key (`sk_test_...`)
 3. Criar webhook endpoint test: `https://<dominio>/api/payments/stripe/webhook`
    (eventos: os quatro checkout.session.* acima)
-4. Copiar signing secret -> `STRIPE_WEBHOOK_SECRET`
-5. Habilitar metodos de pagamento no Dashboard (card primeiro; Pix depois)
-6. Repetir em LIVE mode SOMENTE no go-live (nunca commitar secrets)
+4. Copiar signing secret (`whsec_...`)
+5. No painel Admin em `/{locale}/dashboard/settings` (secao Stripe Payments):
+   - Environment: Test
+   - Secret key: colar a `sk_test_...`
+   - Webhook signing secret: colar a `whsec_...`
+   - Save Stripe settings
+   - Test Stripe connection (verifica a chave contra a API real; o webhook
+     e confirmado como configurado — verificacao real ocorre quando um
+     webhook assinado e recebido, atualizando `last_webhook_verified_at`)
+6. Habilitar metodos de pagamento no Dashboard (card primeiro; Pix depois)
+7. LIVE mode (`sk_live_...`): mesmo fluxo, SOMENTE no go-live. Nunca
+   commitar secrets. Modo test rejeita `sk_live_` e vice-versa.
 
 ## Test vs live
 
@@ -114,8 +139,9 @@ frente.
 
 ## Troubleshooting
 
-- Webhook retorna 400: verificar `STRIPE_WEBHOOK_SECRET` e header
-  `Stripe-Signature` (nao logar valores).
-- Acao retorna CONFIGURATION: verificar `STRIPE_SECRET_KEY` no env do servidor.
+- Webhook retorna 400: verificar webhook signing secret em Admin > Settings
+  (Stripe Payments) e header `Stripe-Signature` (nao logar valores).
+- Acao retorna CONFIGURATION: Stripe ainda nao configurado pelo Admin
+  (Settings > Stripe Payments) ou storage indisponivel.
 - Pedido pago mas UI ainda unpaid: webhook pode nao ter sido entregue;
   verificar Dashboard > Webhooks; revalidacao e best-effort.

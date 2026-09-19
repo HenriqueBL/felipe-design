@@ -41,7 +41,13 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/services/stripe-payment", () => ({
   StripePaymentError: MockStripeError,
-  getStripePaymentProvider: vi.fn(() => providerMock),
+  getStripePaymentProvider: vi.fn(async () => providerMock),
+}));
+
+vi.mock("@/services/stripe-config", () => ({
+  markStripeWebhookVerified: vi.fn(async () => {}),
+  getStripeRuntimeConfiguration: vi.fn(async () => null),
+  resetStripeRuntimeCacheForTests: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({

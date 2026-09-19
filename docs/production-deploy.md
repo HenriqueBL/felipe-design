@@ -37,12 +37,16 @@ somente em runtime via `env_file: .env.production`.
 ### Runtime-only (secrets)
 
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only, runtime.
-- `STRIPE_SECRET_KEY` — server-only, runtime (formato `sk_test_...` ou
-  `sk_live_...`). Nunca Docker ARG; nunca NEXT_PUBLIC.
-- `STRIPE_WEBHOOK_SECRET` — server-only, runtime (formato `whsec_...`).
-  Nunca Docker ARG; nunca NEXT_PUBLIC.
 - `ENABLE_MOCK_PAYMENTS` — deve estar ausente ou `false` em PROD
   (guard no `scripts/validate-production-env.mjs` e no ENTRYPOINT).
+
+Stripe NÃO é mais configurado por env: as credenciais (`sk_test_...`/
+`sk_live_...` e `whsec_...`) são definidas pelo Admin em
+`/{locale}/dashboard/settings` (seção Stripe Payments) e armazenadas
+cifradas no Supabase Vault (migration 0016). Sem configuração o app
+inicia normalmente; pagamentos falham de forma segura
+(`CONFIGURATION`/`PAYMENT_UNAVAILABLE`) até o Admin configurar. Detalhes
+em `docs/payments-stripe.md`.
 
 ### .env.production (template)
 
@@ -51,11 +55,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<jwt>
 SUPABASE_SERVICE_ROLE_KEY=<jwt>
 NEXT_PUBLIC_SITE_URL=https://<dominio>
-STRIPE_SECRET_KEY=<stripe-secret-key>
-STRIPE_WEBHOOK_SECRET=<stripe-webhook-signing-secret>
 APP_IMAGE=felipe-design:<sha>
 APP_PORT=3000
 # ENABLE_MOCK_PAYMENTS omitido
+# STRIPE_* omitido: configurar via Admin > Settings > Stripe Payments
 ```
 
 Validação fail-fast: `node scripts/validate-production-env.mjs` (erro

@@ -308,6 +308,20 @@ export type AppSettingRow = {
   max_source_photo_size_mb: number;
   updated_at: string;
 };
+// 0016: Stripe admin configuration. Metadata ONLY — secrets live in
+// Supabase Vault (secret_key_secret_id / webhook_secret_id).
+export type StripeConfigRow = {
+  id: number;
+  mode: "test" | "live";
+  secret_key_secret_id: string | null;
+  webhook_secret_id: string | null;
+  secret_key_last4: string | null;
+  webhook_configured: boolean;
+  configured_at: string | null;
+  last_webhook_verified_at: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
 export type AppSettingInsert = {
   id?: number;
   daily_capacity?: number;
@@ -346,6 +360,7 @@ export type Database = {
       affiliates: { Row: AffiliateRow; Insert: AffiliateInsert; Update: AffiliateUpdate; Relationships: [] };
       affiliate_commissions: { Row: AffiliateCommissionRow; Insert: AffiliateCommissionInsert; Update: AffiliateCommissionUpdate; Relationships: [] };
       app_settings: { Row: AppSettingRow; Insert: AppSettingInsert; Update: AppSettingUpdate; Relationships: [] };
+      stripe_config: { Row: StripeConfigRow; Insert: Partial<StripeConfigRow>; Update: Partial<StripeConfigRow>; Relationships: [] };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -415,6 +430,35 @@ export type Database = {
           p_max_source_photo_size_mb?: number | null;
         };
         Returns: AppSettingRow;
+      };
+      get_stripe_runtime_config: {
+        Args: Record<string, never>;
+        Returns: { mode: "test" | "live"; secret_key: string; webhook_secret: string }[];
+      };
+      get_stripe_admin_status: {
+        Args: Record<string, never>;
+        Returns: {
+          mode: "test" | "live";
+          secret_key_configured: boolean;
+          webhook_secret_configured: boolean;
+          secret_key_last4: string | null;
+          configured_at: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        }[];
+      };
+      update_stripe_config: {
+        Args: {
+          p_mode: "test" | "live";
+          p_secret_key?: string | null;
+          p_webhook_secret?: string | null;
+          p_updated_by?: string | null;
+        };
+        Returns: void;
+      };
+      mark_stripe_webhook_verified: {
+        Args: Record<string, never>;
+        Returns: void;
       };
       register_source_image: {
         Args: {

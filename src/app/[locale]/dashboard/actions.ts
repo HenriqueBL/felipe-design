@@ -9,6 +9,11 @@ import { isAdminUser } from "@/services/auth";
 import { setOrderStatus } from "@/services/orders";
 import { PlanPriceError, setPlanActive, updatePlanPrice } from "@/services/plans";
 import { updateAppSettings } from "@/services/settings";
+import {
+  StripeConfigError,
+  testStripeConnection,
+  updateStripeConfiguration,
+} from "@/services/stripe-config";
 
 export interface ActionResult {
   success: boolean;
@@ -175,6 +180,80 @@ export async function updateSettingsAction(
     return { success: true, message: "Settings updated." };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed." };
+  }
+}
+
+// Salva a configuracao Stripe pelo Admin. Campos de senha em branco
+// preservam os segredos existentes no Vault. A resposta nunca contem
+// segredo algum — apenas status/mensagens.
+const stripeSettingsSchema = z.object({
+  mode: z.enum(["test", "live"]),
+  secretKey: z.string().max(200),
+  webhookSecret: z.string().max(200),
+});
+
+export async function updateStripeSettingsAction(
+  locale: string,
+  _prevState: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = stripeSettingsSchema.safeParse({
+    mode: formData.get("mode"),
+    secretKey: formData.get("secretKey") ?? "",
+    webhookSecret: formData.get("webhookSecret") ?? "",
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: "Invalid Stripe settings." };
+  }
+
+  try {
+    await updateStripeConfiguration({
+      mode: parsed.data.mode,
+      secretKey: parsed.data.secretKey.trim(),
+      webhookSecret: parsed.data.webhookSecret.trim(),
+    });
+    revalidatePath("/" + safeLocale(locale) + "/dashboard/settings");
+    return { success: true, message: "Stripe settings saved." };
+  } catch (error) {
+    if (error instanceof StripeConfigError) {
+      const messages: Record<string, string> = {
+        FORBIDDEN: "You are not allowed to update Stripe settings.",
+        MODE_MISMATCH: "The secret key does not match the selected mode.",
+        INVALID_KEY: "Invalid secret key format.",
+        INVALID_WEBHOOK: "Invalid webhook signing secret format.",
+        PARTIAL_CONFIGURATION: "Provide both the secret key and the webhook signing secret.",
+        INVALID_MODE: "Invalid mode.",
+        STORAGE_UNAVAILABLE: "Could not save. Try again later.",
+      };
+      return { success: false, message: messages[error.code] ?? "Could not save Stripe settings." };
+    }
+    return { success: false, message: "Could not save Stripe settings. Try again." };
+  }
+}
+
+// Testa a chave da API Stripe com uma chamada leve a API real. O webhook
+// signing secret e reportado apenas como configurado/nao configurado —
+// verificacao real so ocorre com um webhook assinado.
+export async function testStripeConnectionAction(
+  _locale: string,
+  _prevState: ActionResult | null,
+  _formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const result = await testStripeConnection();
+    if (result.apiKey === "VERIFIED" && result.webhookSecret === "CONFIGURED") {
+      return { success: true, message: "Stripe API key: verified. Webhook secret: configured." };
+    }
+    if (result.apiKey === "NOT_CONFIGURED") {
+      return { success: false, message: "Stripe API key: not configured." };
+    }
+    return { success: false, message: "Stripe API key: failed. Check the secret key." };
+  } catch (error) {
+    if (error instanceof StripeConfigError && error.code === "FORBIDDEN") {
+      return { success: false, message: "You are not allowed to test the Stripe connection." };
+    }
+    return { success: false, message: "Could not test the Stripe connection. Try again." };
   }
 }
 
