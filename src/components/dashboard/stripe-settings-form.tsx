@@ -16,7 +16,7 @@ export interface StripeSettingsLabels {
   modeLive: string;
   secretKey: string;
   webhookSecret: string;
-  secretKeyHint: (last4: string) => string;
+  secretKeyHint: string;
   webhookConfigured: string;
   notConfigured: string;
   leaveBlankToKeep: string;
@@ -62,7 +62,7 @@ export default function StripeSettingsForm({
         <div className="form-group">
           <label htmlFor="stripeSecretKey">{labels.secretKey}</label>
           {status?.secretKeyConfigured && status.secretKeyLast4 ? (
-            <p className="hint">{labels.secretKeyHint(status.secretKeyLast4)}</p>
+            <p className="hint">{labels.secretKeyHint}</p>
           ) : (
             <p className="hint">{labels.notConfigured}</p>
           )}
