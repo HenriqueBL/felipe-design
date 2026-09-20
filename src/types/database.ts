@@ -107,7 +107,7 @@ export type OrderRow = {
 export type OrderInsert = {
   id?: string;
   user_id: string;
-  plan_id: string;
+  plan_id: string | null;
   knife_quantity: number;
   total_images: number;
   currency: Currency;
@@ -132,6 +132,41 @@ export type OrderUpdate = {
   paid_at?: string | null;
   source_image_count?: number;
   idempotency_key?: string | null;
+};
+
+export type OrderItemRow = {
+  id: string;
+  order_id: string;
+  item_index: number;
+  plan_id: string;
+  knife_quantity: number;
+  angles: number;
+  unit_price_cents: number;
+  subtotal_cents: number;
+  total_images: number;
+  knife_index_start: number;
+  created_at: string;
+};
+export type OrderItemInsert = {
+  id?: string;
+  order_id: string;
+  item_index: number;
+  plan_id: string;
+  knife_quantity: number;
+  angles: number;
+  unit_price_cents: number;
+  subtotal_cents: number;
+  total_images: number;
+  knife_index_start: number;
+};
+export type OrderItemUpdate = {
+  item_index?: number;
+  knife_quantity?: number;
+  angles?: number;
+  unit_price_cents?: number;
+  subtotal_cents?: number;
+  total_images?: number;
+  knife_index_start?: number;
 };
 
 export type OrderImageRow = {
@@ -352,6 +387,7 @@ export type Database = {
       plans: { Row: PlanRow; Insert: PlanInsert; Update: PlanUpdate; Relationships: [] };
       plan_prices: { Row: PlanPriceRow; Insert: PlanPriceInsert; Update: PlanPriceUpdate; Relationships: [] };
       orders: { Row: OrderRow; Insert: OrderInsert; Update: OrderUpdate; Relationships: [] };
+      order_items: { Row: OrderItemRow; Insert: OrderItemInsert; Update: OrderItemUpdate; Relationships: [] };
       order_images: { Row: OrderImageRow; Insert: OrderImageInsert; Update: OrderImageUpdate; Relationships: [] };
       order_revisions: { Row: OrderRevisionRow; Insert: OrderRevisionInsert; Update: OrderRevisionUpdate; Relationships: [] };
       portfolio_items: { Row: PortfolioItemRow; Insert: PortfolioItemInsert; Update: PortfolioItemUpdate; Relationships: [] };
@@ -368,6 +404,15 @@ export type Database = {
         Args: {
           p_plan_id: string;
           p_knife_quantity: number;
+          p_currency: Currency;
+          p_affiliate_code?: string;
+          p_idempotency_key?: string;
+        };
+        Returns: OrderRow;
+      };
+      create_cart_order: {
+        Args: {
+          p_items: { plan_id: string; quantity: number }[];
           p_currency: Currency;
           p_affiliate_code?: string;
           p_idempotency_key?: string;
