@@ -37,6 +37,15 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  images: {
+    // Imagens publicas do portfolio vem do bucket publico do Supabase.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+      },
+    ],
+  },
   // Saida standalone: server.js autonomo para a imagem Docker de producao.
   output: "standalone",
   async headers() {
