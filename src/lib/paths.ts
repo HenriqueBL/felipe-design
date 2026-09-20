@@ -8,6 +8,10 @@ export function servicesPath(locale: Locale, currency?: Currency): string {
   return currency ? base + "?currency=" + currency : base;
 }
 
+export function cartPath(locale: Locale): string {
+  return locale === "en" ? "/en/cart" : "/pt/carrinho";
+}
+
 export function checkoutPath(locale: Locale): string {
   return locale === "en" ? "/en/checkout" : "/pt/finalizar";
 }

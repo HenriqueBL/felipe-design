@@ -49,6 +49,7 @@ const nextConfig: NextConfig = {
       { source: "/pt/sobre", destination: "/pt/about" },
       { source: "/pt/galeria", destination: "/pt/gallery" },
       { source: "/pt/finalizar", destination: "/pt/checkout" },
+      { source: "/pt/carrinho", destination: "/pt/cart" },
       { source: "/pt/conta", destination: "/pt/account" },
       { source: "/pt/conta/pedidos/:orderId", destination: "/pt/account/orders/:orderId" },
     ];
