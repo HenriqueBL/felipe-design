@@ -1,5 +1,10 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { OrderImageRow, OrderRevisionRow, OrderRow } from "@/types/database";
+import type {
+  OrderImageRow,
+  OrderItemRow,
+  OrderRevisionRow,
+  OrderRow,
+} from "@/types/database";
 
 export interface OrderImageWithUrl extends OrderImageRow {
   signedUrl: string | null;
@@ -7,6 +12,7 @@ export interface OrderImageWithUrl extends OrderImageRow {
 
 export interface AdminOrderDetail {
   order: OrderRow;
+  items: OrderItemRow[];
   customerEmail: string | null;
   planAngles: number | null;
   sourceImages: OrderImageWithUrl[];
@@ -70,12 +76,20 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDe
     return null;
   }
 
-  const [planResult, profileResult, imagesResult, revisionsResult] = await Promise.all([
-    supabase.from("plans").select("angles").eq("id", order.plan_id).maybeSingle(),
-    supabase.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
-    supabase.from("order_images").select("*").eq("order_id", orderId).order("created_at"),
-    supabase.from("order_revisions").select("*").eq("order_id", orderId).order("round"),
-  ]);
+  const [planResult, profileResult, imagesResult, revisionsResult, itemsResult] =
+    await Promise.all([
+      order.plan_id
+        ? supabase.from("plans").select("angles").eq("id", order.plan_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from("profiles").select("email").eq("id", order.user_id).maybeSingle(),
+      supabase.from("order_images").select("*").eq("order_id", orderId).order("created_at"),
+      supabase.from("order_revisions").select("*").eq("order_id", orderId).order("round"),
+      supabase
+        .from("order_items")
+        .select("*")
+        .eq("order_id", orderId)
+        .order("item_index"),
+    ]);
 
   if (imagesResult.error) {
     throw new Error("Failed to load order images: " + imagesResult.error.message);
@@ -88,6 +102,7 @@ export async function getAdminOrderDetail(orderId: string): Promise<AdminOrderDe
 
   return {
     order,
+    items: itemsResult.data ?? [],
     customerEmail: profileResult.data?.email ?? null,
     planAngles: planResult.data?.angles ?? null,
     sourceImages: withUrls.filter((image) => image.kind === "source"),

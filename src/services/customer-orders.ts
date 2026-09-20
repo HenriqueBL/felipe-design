@@ -1,8 +1,15 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { OrderImageRow, OrderRow, OrderRevisionRow, PaymentRow } from "@/types/database";
+import type {
+  OrderImageRow,
+  OrderItemRow,
+  OrderRow,
+  OrderRevisionRow,
+  PaymentRow,
+} from "@/types/database";
 
 export interface CustomerOrderDetail {
   order: OrderRow;
+  items: OrderItemRow[];
   planAngles: number | null;
   sourceImages: OrderImageRow[];
   resultImages: OrderImageRow[];
@@ -45,12 +52,20 @@ export async function getCustomerOrderDetail(orderId: string): Promise<CustomerO
   }
 
   const supabase = await createSupabaseServerClient();
-  const [planResult, imagesResult, revisionsResult, paymentsResult] = await Promise.all([
-    supabase.from("plans").select("angles").eq("id", order.plan_id).maybeSingle(),
-    supabase.from("order_images").select("*").eq("order_id", orderId).order("created_at"),
-    supabase.from("order_revisions").select("*").eq("order_id", orderId).order("round"),
-    supabase.from("payments").select("*").eq("order_id", orderId).order("created_at"),
-  ]);
+  const [planResult, imagesResult, revisionsResult, paymentsResult, itemsResult] =
+    await Promise.all([
+      order.plan_id
+        ? supabase.from("plans").select("angles").eq("id", order.plan_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from("order_images").select("*").eq("order_id", orderId).order("created_at"),
+      supabase.from("order_revisions").select("*").eq("order_id", orderId).order("round"),
+      supabase.from("payments").select("*").eq("order_id", orderId).order("created_at"),
+      supabase
+        .from("order_items")
+        .select("*")
+        .eq("order_id", orderId)
+        .order("item_index"),
+    ]);
 
   if (imagesResult.error) {
     throw new Error("Failed to load order images: " + imagesResult.error.message);
@@ -65,6 +80,7 @@ export async function getCustomerOrderDetail(orderId: string): Promise<CustomerO
   const images = imagesResult.data ?? [];
   return {
     order,
+    items: itemsResult.data ?? [],
     planAngles: planResult.data?.angles ?? null,
     sourceImages: images.filter((image) => image.kind === "source"),
     resultImages: images.filter((image) => image.kind === "result"),

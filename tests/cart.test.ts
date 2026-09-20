@@ -59,7 +59,7 @@ describe("normalizeCart", () => {
       ],
     });
     expect(cart?.items).toHaveLength(1);
-    expect(cart?.items[0].quantity).toBe(3);
+    expect(cart?.items[0]?.quantity).toBe(3);
   });
 
   it("caps merged quantity at 100", () => {
@@ -70,7 +70,7 @@ describe("normalizeCart", () => {
         { planId: "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", quantity: 60 },
       ],
     });
-    expect(cart?.items[0].quantity).toBe(100);
+    expect(cart?.items[0]?.quantity).toBe(100);
   });
 
   it("caps the number of distinct items at the limit", () => {

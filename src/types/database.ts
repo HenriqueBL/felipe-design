@@ -82,7 +82,7 @@ export type PlanPriceUpdate = {
 export type OrderRow = {
   id: string;
   user_id: string;
-  plan_id: string;
+  plan_id: string | null;
   knife_quantity: number;
   total_images: number;
   currency: Currency;
