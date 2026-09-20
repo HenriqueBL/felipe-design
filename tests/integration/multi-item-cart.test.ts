@@ -128,24 +128,26 @@ describe("Multi-item cart (migration 0017)", () => {
       .order("item_index");
 
     expect(items).toHaveLength(2);
+    const item1 = items![0]!;
+    const item2 = items![1]!;
 
     // Item 1: 3-angle, knife range [1,1]
-    expect(items![0].item_index).toBe(1);
-    expect(items![0].plan_id).toBe(plan3Id);
-    expect(items![0].angles).toBe(3);
-    expect(items![0].knife_quantity).toBe(1);
-    expect(items![0].knife_index_start).toBe(1);
-    expect(items![0].total_images).toBe(3);
-    expect(items![0].subtotal_cents).toBe(items![0].unit_price_cents * 1);
+    expect(item1.item_index).toBe(1);
+    expect(item1.plan_id).toBe(plan3Id);
+    expect(item1.angles).toBe(3);
+    expect(item1.knife_quantity).toBe(1);
+    expect(item1.knife_index_start).toBe(1);
+    expect(item1.total_images).toBe(3);
+    expect(item1.subtotal_cents).toBe(item1.unit_price_cents * 1);
 
     // Item 2: 1-angle, knife range [2,2]
-    expect(items![1].item_index).toBe(2);
-    expect(items![1].plan_id).toBe(plan1Id);
-    expect(items![1].angles).toBe(1);
-    expect(items![1].knife_quantity).toBe(1);
-    expect(items![1].knife_index_start).toBe(2);
-    expect(items![1].total_images).toBe(1);
-    expect(items![1].subtotal_cents).toBe(items![1].unit_price_cents * 1);
+    expect(item2.item_index).toBe(2);
+    expect(item2.plan_id).toBe(plan1Id);
+    expect(item2.angles).toBe(1);
+    expect(item2.knife_quantity).toBe(1);
+    expect(item2.knife_index_start).toBe(2);
+    expect(item2.total_images).toBe(1);
+    expect(item2.subtotal_cents).toBe(item2.unit_price_cents * 1);
 
     // Order totals match sum of items
     const itemsSubtotal = items!.reduce((s, i) => s + i.subtotal_cents, 0);
@@ -169,9 +171,10 @@ describe("Multi-item cart (migration 0017)", () => {
       .eq("order_id", order!.id);
 
     expect(items).toHaveLength(1);
-    expect(items![0].unit_price_cents).toBeGreaterThan(0);
-    expect(items![0].subtotal_cents).toBe(items![0].unit_price_cents * 2);
-    expect(order!.total_cents).toBe(items![0].subtotal_cents);
+    const item = items![0]!;
+    expect(item.unit_price_cents).toBeGreaterThan(0);
+    expect(item.subtotal_cents).toBe(item.unit_price_cents * 2);
+    expect(order!.total_cents).toBe(item.subtotal_cents);
   });
 
   it("idempotency: same key returns same order, no duplicate items", async () => {
@@ -336,8 +339,9 @@ describe("Multi-item cart (migration 0017)", () => {
 
       expect(items).toBeDefined();
       expect(items!.length).toBeGreaterThanOrEqual(1);
-      expect(items![0].item_index).toBe(1);
-      expect(items![0].knife_index_start).toBe(1);
+      const firstItem = items![0]!;
+      expect(firstItem.item_index).toBe(1);
+      expect(firstItem.knife_index_start).toBe(1);
     }
   });
 
