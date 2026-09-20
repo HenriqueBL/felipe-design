@@ -62,6 +62,15 @@ Buckets: `client-uploads` e `order-results` **privados**; `portfolio` público. 
 - `submit_source_photos(p_order_id)` (auth): finalização explícita do intake ("Finish photo submission"); exige o mínimo por faca em todas as facas; idempotente; chama `maybe_mark_order_ready`.
 - `maybe_mark_order_ready` (0008): regra v3 de production-ready — ver `docs/queue-and-deadline.md`.
 
+## Multi-item orders e carrinho (migration 0017)
+
+- `order_items`: uma row por linha de carrinho (plan × knife_quantity). Colunas: `order_id`, `item_index` (1..n), `plan_id`, `knife_quantity`, `angles` (snapshot), `unit_price_cents`, `subtotal_cents`, `total_images`, `knife_index_start`. Cada item possui um range global de facas `[knife_index_start, knife_index_start + knife_quantity - 1]`; `order_images.knife_index` continua sendo um índice global único (1..`orders.knife_quantity`). Constraints: `order_items_subtotal_matches` (subtotal = unitário × qty), `order_items_images_matches` (total_images = qty × angles), unicidade por `(order_id, item_index)` e `(order_id, knife_index_start)`.
+- `orders.plan_id` agora é nullable: pedidos multi-item não têm um único plano; pedidos legados e single-item continuam preenchendo a coluna. As constraints `orders_subtotal_matches` e `orders_total_matches` foram removidas (igualdade agora garantida transacionalmente no RPC e pelas checks por item).
+- Backfill idempotente: todo pedido legado sem `order_items` recebe exatamente um item (item_index 1, knife_index_start 1) com snapshots copiados da própria ordem e ângulos do plano original.
+- `create_cart_order(p_items jsonb, p_currency, p_affiliate_code?, p_idempotency_key?)` (auth): criação atômica de pedido multi-item. Valida 1..20 linhas, qty 1..100, planos ativos, preços vigentes; computa totais e total_images; insere order + items em uma transação. Idempotência por `(idempotency_key, user_id)` com retry-select em `unique_violation`. Códigos de erro: `NOT_AUTHENTICATED`, `INVALID_ITEMS`, `PLAN_NOT_FOUND`, `PRICE_NOT_FOUND`, `IDEMPOTENCY_CONFLICT`.
+- `register_source_image` (atualizado): valida `knife_index` contra ranges de `order_items` quando existem; fallback para check legado (1..`knife_quantity`) se não houver itens (defensivo — backfill garante que sempre existe pelo menos um item).
+- RLS em `order_items`: select próprio ou admin (via join com `orders.user_id`); escrita apenas por RPCs `security definer`.
+
 ## Segurança adicional
 
 - Service role nunca chega ao frontend; clientes admin existem apenas em código server-side.
