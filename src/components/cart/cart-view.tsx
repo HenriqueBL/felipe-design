@@ -90,15 +90,17 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
     return unsubscribe;
   }, [refresh]);
 
-  // Moeda do carrinho pode divergir da pagina (troca de contexto): so mostra
-  // o carrinho na moeda em que ele foi criado; o checkout nunca converte.
-  const effectiveCart = cart && cart.currency === currency ? cart : null;
+  // Currency authority lives in localStorage (cart.currency). The URL-derived
+  // `currency` prop is only a hint for empty-cart "continue shopping" links;
+  // we never hide a populated cart because the URL lacks ?currency=.
+  const activeCart = cart && cart.items.length > 0 ? cart : null;
+  const displayCurrency = activeCart?.currency ?? currency;
 
   if (!loaded) {
     return <section aria-busy="true" />;
   }
 
-  if (!effectiveCart) {
+  if (!activeCart) {
     return (
       <section className="cart-empty">
         <h1>{labels.emptyTitle}</h1>
@@ -110,15 +112,15 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
     );
   }
 
-  const totalCents = effectiveCart.items.reduce((sum, item) => {
+  const totalCents = activeCart.items.reduce((sum, item) => {
     const price = pricing.get(item.planId)?.priceCents;
     return price === null || price === undefined ? sum : sum + price * item.quantity;
   }, 0);
-  const totalImages = effectiveCart.items.reduce(
+  const totalImages = activeCart.items.reduce(
     (sum, item) => sum + item.quantity * (pricing.get(item.planId)?.angles ?? 0),
     0,
   );
-  const allPriced = effectiveCart.items.every(
+  const allPriced = activeCart.items.every(
     (item) => pricing.get(item.planId)?.priceCents != null,
   );
 
@@ -126,7 +128,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
     <section className="cart-page">
       <h1>{labels.title}</h1>
       <ul className="cart-items">
-        {effectiveCart.items.map((item) => {
+        {activeCart.items.map((item) => {
           const info = pricing.get(item.planId);
           return (
             <li className="cart-item" key={item.planId}>
@@ -136,7 +138,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
                 </p>
                 <p className="cart-item-price">
                   {info?.priceCents != null
-                    ? formatMoney(info.priceCents, effectiveCart.currency, intlLocale)
+                    ? formatMoney(info.priceCents, displayCurrency, intlLocale)
                     : labels.priceUnavailable}
                 </p>
               </div>
@@ -162,7 +164,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
               {info?.priceCents != null ? (
                 <p className="cart-item-subtotal">
                   {labels.subtotal}:{" "}
-                  {formatMoney(info.priceCents * item.quantity, effectiveCart.currency, intlLocale)}
+                  {formatMoney(info.priceCents * item.quantity, displayCurrency, intlLocale)}
                 </p>
               ) : null}
             </li>
@@ -174,10 +176,10 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
           {labels.totalImages}: {totalImages}
         </p>
         <p className="cart-total">
-          {labels.total}: {formatMoney(totalCents, effectiveCart.currency, intlLocale)}
+          {labels.total}: {formatMoney(totalCents, displayCurrency, intlLocale)}
         </p>
         <div className="cart-actions">
-          <Link href={servicesPath(locale, currency)}>{labels.continueShopping}</Link>
+          <Link href={servicesPath(locale, displayCurrency)}>{labels.continueShopping}</Link>
           <button type="button" className="btn btn-secondary" onClick={() => clearCart()}>
             {labels.clear}
           </button>

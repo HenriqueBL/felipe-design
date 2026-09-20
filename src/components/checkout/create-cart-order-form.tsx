@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useActionState } from "react";
 import {
   createCartOrderAction,
@@ -28,6 +29,7 @@ interface CreateCartOrderFormProps {
   items: CartOrderItemIntent[];
   currency: Currency;
   idempotencyKey: string;
+  onSuccess?: (result: CreateOrderResult) => void;
 }
 
 function messageForCode(
@@ -52,11 +54,28 @@ export default function CreateCartOrderForm({
   items,
   currency,
   idempotencyKey,
+  onSuccess,
 }: CreateCartOrderFormProps) {
   const [state, formAction, isPending] = useActionState<
     CreateOrderResult | null,
     FormData
   >(createCartOrderAction.bind(null, locale), null);
+
+  // Track whether we've already fired the success callback for this result
+  // to avoid double-firing on re-renders.
+  const handledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      state !== null &&
+      state.success === true &&
+      state.orderId &&
+      handledRef.current !== state.orderId
+    ) {
+      handledRef.current = state.orderId;
+      onSuccess?.(state);
+    }
+  }, [state, onSuccess]);
 
   return (
     <form action={formAction}>

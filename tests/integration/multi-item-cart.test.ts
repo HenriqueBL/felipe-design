@@ -118,7 +118,8 @@ describe("Multi-item cart (migration 0017)", () => {
     expect(order).not.toBeNull();
     expect(order!.knife_quantity).toBe(2);
     expect(order!.total_images).toBe(4);
-    expect(order!.plan_id).toBe(plan3Id); // first item's plan stored on order
+    // Multi-item orders have NULL plan_id; order_items is the authority.
+    expect(order!.plan_id).toBeNull();
 
     // Verify order_items via admin (service role bypasses RLS for inspection)
     const { data: items } = await admin
@@ -175,6 +176,36 @@ describe("Multi-item cart (migration 0017)", () => {
     expect(item.unit_price_cents).toBeGreaterThan(0);
     expect(item.subtotal_cents).toBe(item.unit_price_cents * 2);
     expect(order!.total_cents).toBe(item.subtotal_cents);
+    // Single-item order retains plan_id on orders row
+    expect(order!.plan_id).toBe(plan3Id);
+  });
+
+  it("price snapshot consistency: orders.total_cents matches sum of item subtotals from single read", async () => {
+    const idemKey = crypto.randomUUID();
+    const { data: order, error } = await userClient.rpc("create_cart_order", {
+      p_items: [
+        { plan_id: plan3Id, quantity: 1 },
+        { plan_id: plan1Id, quantity: 1 },
+      ],
+      p_currency: "BRL",
+      p_idempotency_key: idemKey,
+    });
+    expect(error).toBeNull();
+    expect(order).not.toBeNull();
+
+    const { data: items } = await admin
+      .from("order_items")
+      .select("unit_price_cents, subtotal_cents")
+      .eq("order_id", order!.id)
+      .order("item_index");
+
+    expect(items).toHaveLength(2);
+    const itemsSum = items!.reduce((s, i) => s + i.subtotal_cents, 0);
+    // Critical invariant: orders.total_cents MUST equal the sum of item
+    // subtotals computed from the SAME price snapshot. Migration 0018
+    // guarantees this by materializing validated items in a temp table
+    // before inserting either orders or order_items.
+    expect(order!.total_cents).toBe(itemsSum);
   });
 
   it("idempotency: same key returns same order, no duplicate items", async () => {

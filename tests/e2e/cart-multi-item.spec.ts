@@ -28,109 +28,117 @@ test.describe("Multi-item Cart Journey", () => {
     }
   });
 
-  test("add two plans to cart, verify quantities, persist across refresh, checkout with auth boundary", async ({ browser }) => {
-    // ─── STEP 1: Unauthenticated visitor adds items to cart ───
+  test("full happy path: add 2 items → persist → auth → checkout → order created → cart cleared → redirect", async ({ browser }) => {
+    // ─── STEP 1: Unauthenticated visitor adds two plans ───
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
 
     await page.goto("/en/services");
     await expect(page.locator("h1")).toContainText(/services/i);
 
-    // Find plan cards — we need at least 2 different plans
     const addToCartButtons = page.locator('button:has-text("Add to cart"), button:has-text("Add")');
-    const buttonCount = await addToCartButtons.count();
-    expect(buttonCount).toBeGreaterThanOrEqual(2);
+    await expect(addToCartButtons).toHaveCount(await addToCartButtons.count(), { timeout: 10_000 });
+    const initialCount = await addToCartButtons.count();
+    expect(initialCount).toBeGreaterThanOrEqual(2);
 
     // Add first plan
     await addToCartButtons.nth(0).click();
-    // Wait for badge to update
     const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="cart"] span, a[href*="carrinho"] span');
-    await expect(badge.first()).toBeVisible({ timeout: 5_000 });
+    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
 
     // Add second plan
     await addToCartButtons.nth(1).click();
-    // Badge should now show 2
     await expect(badge.first()).toContainText("2", { timeout: 5_000 });
 
-    // ─── STEP 2: Navigate to cart and verify 2 items ───
+    // ─── STEP 2: Navigate to cart — must show exactly 2 items ───
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     await expect(page.locator("h1")).toContainText(/cart|carrinho/i);
 
-    // Should show 2 line items
     const cartItems = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(cartItems).toHaveCount(2, { timeout: 10_000 });
 
-    // Verify server-revalidated prices are displayed (not $0 or empty)
+    // Server-revalidated prices must be visible
     await expect(page.locator("main")).toContainText(/\$|R\$/);
 
-    // ─── STEP 3: Modify quantity ───
-    const qtyInputs = page.locator('input[type="number"], select[name*="quantity"], [data-quantity-input]');
-    if ((await qtyInputs.count()) > 0) {
-      // Change first item quantity to 2
-      await qtyInputs.first().fill("2");
-      // Trigger change event if needed
-      await qtyInputs.first().dispatchEvent("change");
-      // Total should update (wait for revalidation)
-      await page.waitForTimeout(1_000);
-      // Page should still show valid totals
-      await expect(page.locator("main")).toContainText(/\$|R\$/);
-    }
-
-    // ─── STEP 4: Remove an item ───
-    const removeButtons = page.locator('button:has-text("Remove"), button:has-text("Remover"), [data-remove-item]');
-    if ((await removeButtons.count()) > 0) {
-      await removeButtons.first().click();
-      await expect(cartItems).toHaveCount(1, { timeout: 5_000 });
-    }
-
-    // ─── STEP 5: Refresh — cart persists via localStorage ───
+    // ─── STEP 3: Refresh — cart MUST persist via localStorage ───
     await page.reload();
     await expect(page).toHaveURL(/\/en\/cart/);
-    // Cart should still have items after refresh
     const cartItemsAfterRefresh = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
-    await expect(cartItemsAfterRefresh).toHaveCount(1, { timeout: 10_000 });
+    await expect(cartItemsAfterRefresh).toHaveCount(2, { timeout: 10_000 });
 
-    // ─── STEP 6: Add item back ───
-    await page.goto("/en/services");
-    const addButtons2 = page.locator('button:has-text("Add to cart"), button:has-text("Add")');
-    await addButtons2.nth(0).click();
-    await page.goto("/en/cart");
-    await expect(page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]')).toHaveCount(2, { timeout: 10_000 });
-
-    // ─── STEP 7: Checkout — should redirect to login for unauthenticated user ───
-    const checkoutBtn = page.locator('a[href*="checkout"], button:has-text("Checkout"), button:has-text("Finalizar"), a:has-text("Checkout")');
-    if ((await checkoutBtn.count()) > 0) {
-      await checkoutBtn.first().click();
-      // Should redirect to login or show checkout with login prompt
-      await page.waitForLoadState("networkidle");
-      const url = page.url();
-      const isLoginOrCheckout = /\/(login|checkout|finalizar)/.test(url);
-      expect(isLoginOrCheckout).toBeTruthy();
-    }
-
-    // ─── STEP 8: Authenticate and verify cart survives auth boundary ───
+    // ─── STEP 4: Authenticate — cart MUST survive auth boundary ───
     await authenticateWithSSR(page, state.email, state.password);
 
-    // After auth, navigate to cart — items should still be there
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     const cartItemsAfterAuth = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
-    // Cart may have items or be empty depending on implementation
-    // Key assertion: page loads without error
+    await expect(cartItemsAfterAuth).toHaveCount(2, { timeout: 10_000 });
+
+    // ─── STEP 5: Checkout as authenticated user ───
+    await page.goto("/en/checkout?cart=1");
+    await expect(page).toHaveURL(/\/en\/checkout/);
     await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
 
-    // ─── STEP 9: If cart has items, proceed to checkout as authenticated user ───
-    const itemCount = await cartItemsAfterAuth.count();
-    if (itemCount > 0) {
-      const authCheckoutBtn = page.locator('a[href*="checkout"], button:has-text("Checkout"), button:has-text("Finalizar")');
-      if ((await authCheckoutBtn.count()) > 0) {
-        await authCheckoutBtn.first().click();
-        await page.waitForLoadState("networkidle");
-        // Should land on checkout page (not login)
-        await expect(page).toHaveURL(/\/en\/checkout/);
-        await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
-      }
+    // Verify checkout shows 2 items with prices
+    const checkoutItems = page.locator('.cart-item, [data-cart-item], li[class*="item"]');
+    await expect(checkoutItems).toHaveCount(2, { timeout: 10_000 });
+
+    // Submit the order
+    const submitBtn = page.locator('button[type="submit"]:has-text("Place order"), button[type="submit"]:has-text("Finalizar pedido")');
+    await expect(submitBtn.first()).toBeVisible({ timeout: 10_000 });
+    await submitBtn.first().click();
+
+    // ─── STEP 6: Must redirect to account order page (not stay on checkout) ───
+    await expect(page).toHaveURL(/\/en\/account\/orders\//, { timeout: 30_000 });
+
+    // ─── STEP 7: Order detail must show 2 items ───
+    await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
+    // The order detail page should contain item breakdown info
+    await expect(page.locator("main")).toContainText(/angle|ângulo/i, { timeout: 10_000 });
+
+    // ─── STEP 8: Cart MUST be empty after successful order ───
+    await page.goto("/en/cart");
+    await expect(page).toHaveURL(/\/en\/cart/);
+    // Cart should now be empty — either shows empty state or 0 items
+    const cartItemsAfterOrder = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
+    await expect(cartItemsAfterOrder).toHaveCount(0, { timeout: 10_000 });
+
+    await context.close();
+  });
+
+  test("EN currency preservation: services?currency=BRL → cart shows BRL", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+
+    // Navigate to services with explicit BRL currency
+    await page.goto("/en/services?currency=BRL");
+    await expect(page.locator("h1")).toContainText(/services/i);
+
+    // Add a plan to cart
+    const addToCartButtons = page.locator('button:has-text("Add to cart"), button:has-text("Add")');
+    await expect(addToCartButtons.first()).toBeVisible({ timeout: 10_000 });
+    await addToCartButtons.first().click();
+
+    const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="cart"] span');
+    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
+
+    // Navigate to cart WITHOUT currency param — must still show BRL from localStorage
+    await page.goto("/en/cart");
+    await expect(page).toHaveURL(/\/en\/cart/);
+
+    // Cart must NOT appear empty
+    const cartItems = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
+    await expect(cartItems).toHaveCount(1, { timeout: 10_000 });
+
+    // Price must be displayed in BRL format (R$)
+    await expect(page.locator("main")).toContainText(/R\$/, { timeout: 5_000 });
+
+    // Continue Shopping link should preserve BRL
+    const continueLink = page.locator('a:has-text("Continue"), a:has-text("Continuar")');
+    if ((await continueLink.count()) > 0) {
+      const href = await continueLink.first().getAttribute("href");
+      expect(href).toContain("currency=BRL");
     }
 
     await context.close();
@@ -156,6 +164,36 @@ test.describe("Multi-item Cart Journey", () => {
 
     const items = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(items).toHaveCount(2, { timeout: 10_000 });
+
+    await context.close();
+  });
+
+  test("PT currency preservation: servicos?currency=USD → carrinho mostra USD", async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+
+    // Navigate to PT services with explicit USD currency
+    await page.goto("/pt/servicos?currency=USD");
+    await expect(page.locator("h1")).toContainText(/servi/i);
+
+    // Add a plan to cart
+    const addButtons = page.locator('button:has-text("Adicionar"), button:has-text("Add")');
+    await expect(addButtons.first()).toBeVisible({ timeout: 10_000 });
+    await addButtons.first().click();
+
+    const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="carrinho"] span, a[href*="cart"] span');
+    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
+
+    // Navigate to cart WITHOUT currency param — must still show USD from localStorage
+    await page.goto("/pt/carrinho");
+    await expect(page).toHaveURL(/\/pt\/carrinho/);
+
+    // Cart must NOT appear empty
+    const cartItems = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
+    await expect(cartItems).toHaveCount(1, { timeout: 10_000 });
+
+    // Price must be displayed in USD format ($)
+    await expect(page.locator("main")).toContainText(/\$/, { timeout: 5_000 });
 
     await context.close();
   });

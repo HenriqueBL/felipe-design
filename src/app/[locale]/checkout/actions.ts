@@ -10,12 +10,13 @@ import {
   OrderCreationError,
 } from "@/services/order-creation";
 import { parseCartIntent } from "@/domain/checkout";
-import { clearCart } from "@/lib/cart-store";
 import { accountOrderPath, checkoutPath, loginPath } from "@/lib/paths";
 
 export interface CreateOrderResult {
   success: boolean;
   errorCode?: string;
+  orderId?: string;
+  redirectUrl?: string;
 }
 
 // O browser envia apenas a intencao: plano, quantidade, moeda e chave de
@@ -159,9 +160,12 @@ export async function createCartOrderAction(
   }
 
   if (createdOrderId !== null) {
-    clearCart();
     revalidatePath("/" + current + "/account");
-    redirect(accountOrderPath(current, createdOrderId));
+    return {
+      success: true,
+      orderId: createdOrderId,
+      redirectUrl: accountOrderPath(current, createdOrderId),
+    };
   }
 
   return { success: false, errorCode: errorCode ?? "UNKNOWN" };

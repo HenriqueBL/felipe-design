@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import type { CreateOrderResult } from "@/app/[locale]/checkout/actions";
 import type { Cart } from "@/domain/cart";
-import { readCart, subscribeToCart } from "@/lib/cart-store";
+import { clearCart, readCart, subscribeToCart } from "@/lib/cart-store";
 import type { Locale } from "@/lib/i18n/config";
 import { cartPath, servicesPath } from "@/lib/paths";
 import type { Currency } from "@/types/database";
@@ -90,6 +92,7 @@ export default function CartCheckoutView({
   user,
   labels,
 }: CartCheckoutViewProps) {
+  const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [pricing, setPricing] = useState<Map<string, CartPricingItem>>(new Map());
   const [loaded, setLoaded] = useState(false);
@@ -227,6 +230,12 @@ export default function CartCheckoutView({
                   }))}
                   currency={cart.currency}
                   idempotencyKey={idempotencyKey}
+                  onSuccess={(result) => {
+                    clearCart();
+                    if (result.redirectUrl) {
+                      router.push(result.redirectUrl);
+                    }
+                  }}
                 />
               ) : (
                 <p className="form-status err">{labels.priceUnavailable}</p>
