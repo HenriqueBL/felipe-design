@@ -38,6 +38,10 @@ export interface SourcePhotoUploadLabels {
   maxSizeNote: (size: number) => string;
   knifeLabel: (index: number) => string;
   countLabel: (count: number, max: number) => string;
+  /** Multi-item: label for item group header (e.g. "Item 1"). */
+  itemLabel: (index: number) => string;
+  /** Multi-item: e.g. "3-angle package, 2 knives". */
+  itemAnglesLabel: (angles: number, knives: number) => string;
   add: string;
   choose: string;
   retry: string;
@@ -94,6 +98,13 @@ interface UploadJob {
   persistedImageId?: string;
 }
 
+export interface SourcePhotoItemGroup {
+  itemIndex: number;
+  angles: number;
+  knifeIndexStart: number;
+  knifeQuantity: number;
+}
+
 export interface SourcePhotoUploadAreaProps {
   orderId: string;
   locale: Locale;
@@ -103,6 +114,8 @@ export interface SourcePhotoUploadAreaProps {
   maxPerKnife: number;
   maxPhotoSizeMb: number;
   images: SourcePhotoItem[];
+  /** Multi-item orders: group knives by item for clearer UX. */
+  items?: SourcePhotoItemGroup[];
 }
 
 const ACCEPT_ATTR = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
@@ -141,6 +154,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
     maxPerKnife,
     maxPhotoSizeMb,
     images,
+    items,
   } = props;
 
   // Labels derivados client-side: Server Components nao podem passar funcoes
@@ -438,24 +452,37 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
         </p>
       ) : null}
 
-      {Array.from({ length: knifeQuantity }, (_, i) => i + 1).map((knifeIndex) => {
-        const count = countsByKnife[knifeIndex] ?? 0;
-        const capacity = Math.max(0, maxPerKnife - count);
-            // Fotos e jobs desta faca ficam DENTRO do grupo — isolamento
-            // visual por faca (nunca uma lista global compartilhada).
-            const groupImages = visibleImages.filter((img) => img.knifeIndex === knifeIndex);
-            // Jobs completed cuja imagem ja foi persistida nao renderizam:
-            // a foto registrada ja representa o mesmo arquivo (id persistido).
-            const groupJobs = jobs.filter(
-              (j) =>
-                j.knifeIndex === knifeIndex &&
-                !(j.state === "completed" && j.persistedImageId),
-            );
-            return (
-              <div key={knifeIndex} className="source-photo-knife">
-                <h4>
-                  {labels.knifeLabel(knifeIndex)} — {labels.countLabel(count, maxPerKnife)}
-                </h4>
+      {(items && items.length > 0 ? items : [{ itemIndex: 0, angles: 0, knifeIndexStart: 1, knifeQuantity }]).map((group) => {
+        const groupKnives = Array.from(
+          { length: group.knifeQuantity },
+          (_, i) => group.knifeIndexStart + i,
+        );
+        return (
+          <div key={"item-" + group.itemIndex} className="source-photo-item-group">
+            {group.itemIndex > 0 ? (
+              <h3 className="source-photo-item-heading">
+                {labels.itemLabel(group.itemIndex)} —{" "}
+                {labels.itemAnglesLabel(group.angles, group.knifeQuantity)}
+              </h3>
+            ) : null}
+            {groupKnives.map((knifeIndex) => {
+              const count = countsByKnife[knifeIndex] ?? 0;
+              const capacity = Math.max(0, maxPerKnife - count);
+              // Fotos e jobs desta faca ficam DENTRO do grupo — isolamento
+              // visual por faca (nunca uma lista global compartilhada).
+              const groupImages = visibleImages.filter((img) => img.knifeIndex === knifeIndex);
+              // Jobs completed cuja imagem ja foi persistida nao renderizam:
+              // a foto registrada ja representa o mesmo arquivo (id persistido).
+              const groupJobs = jobs.filter(
+                (j) =>
+                  j.knifeIndex === knifeIndex &&
+                  !(j.state === "completed" && j.persistedImageId),
+              );
+              return (
+                <div key={knifeIndex} className="source-photo-knife">
+                  <h4>
+                    {labels.knifeLabel(knifeIndex)} — {labels.countLabel(count, maxPerKnife)}
+                  </h4>
 
                 {groupImages.length > 0 || groupJobs.length > 0 ? (
                   <ul className="source-photo-list">
@@ -548,6 +575,9 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
               </div>
             );
           })}
+        </div>
+      );
+    })}
 
       {!submitted ? (
         <button

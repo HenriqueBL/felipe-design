@@ -252,6 +252,12 @@ export default async function CustomerOrderPage({
             maxPerKnife={order.max_source_photos_per_knife}
             maxPhotoSizeMb={order.max_source_photo_size_mb}
             images={sourcePhotoItems}
+            items={detail.items.map((item) => ({
+              itemIndex: item.item_index,
+              angles: item.angles,
+              knifeIndexStart: item.knife_index_start,
+              knifeQuantity: item.knife_quantity,
+            }))}
           />
         </section>
       ) : null}

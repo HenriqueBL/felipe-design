@@ -183,6 +183,9 @@ const pt: Dictionary = {
       maxSizeNote: (size: number) => `Máximo de ${size} MB por foto.`,
       knifeLabel: (index: number) => `Faca ${index}`,
       countLabel: (count: number, max: number) => `${count} / ${max} fotos`,
+      itemLabel: (index: number) => `Item ${index}`,
+      itemAnglesLabel: (angles: number, knives: number) =>
+        `Pacote de ${angles} ângulos, ${knives} ${knives === 1 ? "faca" : "facas"}`,
       choose: "Adicionar fotos",
       remove: "Remover",
       removeConfirm: "Remover esta foto deste pedido?",

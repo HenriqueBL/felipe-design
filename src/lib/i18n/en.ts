@@ -181,6 +181,9 @@ const en = {
       maxSizeNote: (size: number) => `Maximum ${size} MB per photo.`,
       knifeLabel: (index: number) => `Knife ${index}`,
       countLabel: (count: number, max: number) => `${count} / ${max} photos`,
+      itemLabel: (index: number) => `Item ${index}`,
+      itemAnglesLabel: (angles: number, knives: number) =>
+        `${angles}-angle package, ${knives} ${knives === 1 ? "knife" : "knives"}`,
       choose: "Add photos",
       remove: "Remove",
       removeConfirm: "Remove this photo from this order?",
