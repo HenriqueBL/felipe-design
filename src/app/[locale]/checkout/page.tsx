@@ -10,6 +10,7 @@ import { formatMoney } from "@/lib/format";
 import { checkoutPath, servicesPath } from "@/lib/paths";
 import LoginForm from "@/components/login-form";
 import CreateOrderForm from "@/components/checkout/create-order-form";
+import CartCheckoutView from "@/components/checkout/cart-checkout-view";
 import type { EstimateDeliveryResult } from "@/types/database";
 
 function resolve(locale: string): Locale {
@@ -52,6 +53,55 @@ export default async function CheckoutPage({
   const query = await searchParams;
   const dictionary = await getDictionary(current);
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
+
+  // Cart checkout: ?cart=1 signals multi-item flow. Client-side cart-store
+  // provides items; server revalidates prices via /api/cart-pricing before
+  // submission. User check happens server-side so the client component
+  // receives auth state as a prop (no server calls from client).
+  const isCartCheckout = query.cart === "1";
+
+  if (isCartCheckout) {
+    const user = await getCurrentUser();
+    return (
+      <CartCheckoutView
+        locale={current}
+        intlLocale={intlLocale}
+        user={user && user.email ? { email: user.email } : null}
+        labels={{
+          title: dictionary.checkout.title,
+          cartItemsTitle: dictionary.checkout.cartItemsTitle,
+          invalidCart: dictionary.checkout.invalidCart,
+          anglesLabel: dictionary.services.anglesLabel,
+          knivesLabel: dictionary.checkout.knivesLabel,
+          imagesLabel: dictionary.checkout.imagesLabel,
+          unitPrice: dictionary.checkout.unitPrice,
+          subtotal: dictionary.cart.subtotal,
+          total: dictionary.checkout.total,
+          totalImages: dictionary.cart.totalImages,
+          estimatedTurnaround: dictionary.checkout.estimatedTurnaround,
+          businessDaysAfterReady: dictionary.checkout.businessDaysAfterReady,
+          backlogNote: dictionary.checkout.backlogNote,
+          deadlineNote: dictionary.checkout.deadlineNote,
+          estimateUnavailable: dictionary.checkout.estimateUnavailable,
+          signedInAs: dictionary.checkout.signedInAs,
+          loginRequired: dictionary.checkout.loginRequired,
+          emailLabel: dictionary.checkout.emailLabel,
+          emailPlaceholder: dictionary.checkout.emailPlaceholder,
+          sendMagicLink: dictionary.checkout.sendMagicLink,
+          magicLinkSent: dictionary.checkout.magicLinkSent,
+          magicLinkRateLimited: dictionary.checkout.magicLinkRateLimited,
+          error: dictionary.checkout.error,
+          backToServices: dictionary.checkout.backToServices,
+          backToCart: dictionary.cart.continueShopping,
+          createCartOrder: dictionary.checkout.createCartOrder,
+          creatingCartOrder: dictionary.checkout.creatingCartOrder,
+          invalidSelection: dictionary.checkout.invalidSelection,
+          planUnavailable: dictionary.checkout.planUnavailable,
+          priceUnavailable: dictionary.cart.priceUnavailable ?? "",
+        }}
+      />
+    );
+  }
 
   const checkoutParams = parseCheckoutParams(toURLSearchParams(query));
 

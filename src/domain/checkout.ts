@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Locale } from "@/lib/i18n/config";
 import type { Currency, OrderStatus } from "@/types/database";
+import { CART_MAX_ITEMS, CART_MAX_QUANTITY_PER_PLAN } from "./cart";
 
 export const CURRENCIES: readonly Currency[] = ["BRL", "USD"];
 
@@ -134,4 +135,26 @@ export function isMockPaymentsEnabled(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   return env.ENABLE_MOCK_PAYMENTS === "true";
+}
+
+// Cart checkout intent: browser sends only planId + quantity per line plus
+// currency and idempotency key. Prices/totals are never trusted from client.
+export const cartItemIntentSchema = z.object({
+  planId: z.string().uuid(),
+  quantity: z.coerce.number().int().min(1).max(CART_MAX_QUANTITY_PER_PLAN),
+});
+
+export type CartItemIntent = z.infer<typeof cartItemIntentSchema>;
+
+export const cartIntentSchema = z.object({
+  items: z.array(cartItemIntentSchema).min(1).max(CART_MAX_ITEMS),
+  currency: z.enum(["BRL", "USD"]),
+  idempotencyKey: z.string().uuid(),
+});
+
+export type CartIntent = z.infer<typeof cartIntentSchema>;
+
+export function parseCartIntent(raw: unknown): CartIntent | null {
+  const parsed = cartIntentSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
 }
