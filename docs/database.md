@@ -71,6 +71,15 @@ Buckets: `client-uploads` e `order-results` **privados**; `portfolio` público. 
 - `register_source_image` (atualizado): valida `knife_index` contra ranges de `order_items` quando existem; fallback para check legado (1..`knife_quantity`) se não houver itens (defensivo — backfill garante que sempre existe pelo menos um item).
 - RLS em `order_items`: select próprio ou admin (via join com `orders.user_id`); escrita apenas por RPCs `security definer`.
 
+### Price snapshot consistency (migration 0018)
+
+- `create_cart_order` reescrito para validar e materializar preços em uma temp table `_cart_validated_items` em uma única passagem. Order e items são inseridos exclusivamente a partir desse snapshot; não há segunda leitura de `plan_prices` após a criação do pedido. Isso elimina a janela de concorrência em que `orders.total_cents` poderia refletir um preço diferente de `order_items.subtotal_cents`.
+- `orders.plan_id`: NULL para pedidos multi-item (>1 item); mantém o `plan_id` apenas para pedidos single-item. `order_items` é a autoridade exclusiva de composição; nenhum reader deve interpretar `orders.plan_id` como "o plano do pedido inteiro" quando existem múltiplos itens.
+
+### Aggregate knife limit guard (migration 0019)
+
+- `create_cart_order` agora valida `v_total_knives <= 100` antes de qualquer escrita, levantando `INVALID_ITEMS` se o total agregado exceder o limite. Isso alinha o RPC com a constante `CART_MAX_TOTAL_KNIVES = 100` em `src/domain/cart.ts` e evita erros genéricos de CHECK constraint no banco. O frontend (`normalizeCart`) aplica o mesmo limite proporcionalmente ao adicionar/atualizar itens.
+
 ## Segurança adicional
 
 - Service role nunca chega ao frontend; clientes admin existem apenas em código server-side.

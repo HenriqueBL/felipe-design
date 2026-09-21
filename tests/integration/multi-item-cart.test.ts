@@ -208,6 +208,47 @@ describe("Multi-item cart (migration 0017)", () => {
     expect(order!.total_cents).toBe(itemsSum);
   });
 
+  it("aggregate knife limit: 50 + 50 = 100 passes", async () => {
+    const idemKey = crypto.randomUUID();
+    const { data: order, error } = await userClient.rpc("create_cart_order", {
+      p_items: [
+        { plan_id: plan3Id, quantity: 50 },
+        { plan_id: plan1Id, quantity: 50 },
+      ],
+      p_currency: "BRL",
+      p_idempotency_key: idemKey,
+    });
+    expect(error).toBeNull();
+    expect(order).not.toBeNull();
+    expect(order!.knife_quantity).toBe(100);
+  });
+
+  it("aggregate knife limit: 60 + 41 = 101 rejected with INVALID_ITEMS", async () => {
+    const idemKey = crypto.randomUUID();
+    const { error } = await userClient.rpc("create_cart_order", {
+      p_items: [
+        { plan_id: plan3Id, quantity: 60 },
+        { plan_id: plan1Id, quantity: 41 },
+      ],
+      p_currency: "BRL",
+      p_idempotency_key: idemKey,
+    });
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("INVALID_ITEMS");
+  });
+
+  it("aggregate knife limit: single item 100 passes", async () => {
+    const idemKey = crypto.randomUUID();
+    const { data: order, error } = await userClient.rpc("create_cart_order", {
+      p_items: [{ plan_id: plan3Id, quantity: 100 }],
+      p_currency: "BRL",
+      p_idempotency_key: idemKey,
+    });
+    expect(error).toBeNull();
+    expect(order).not.toBeNull();
+    expect(order!.knife_quantity).toBe(100);
+  });
+
   it("idempotency: same key returns same order, no duplicate items", async () => {
     const idemKey = crypto.randomUUID();
 

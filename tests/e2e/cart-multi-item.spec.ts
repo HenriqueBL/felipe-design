@@ -28,16 +28,12 @@ test.describe("Multi-item Cart Journey", () => {
     }
   });
 
-  test("full happy path: add 2 items → persist → auth → checkout → order created → cart cleared → redirect", async ({ browser }) => {
+  test("full happy path: add 2 items → persist → auth → checkout → order created → cart cleared → redirect", async ({ page }) => {
     // ─── STEP 1: Unauthenticated visitor adds two plans ───
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    const page = await context.newPage();
-
     await page.goto("/en/services");
     await expect(page.locator("h1")).toContainText(/services/i);
 
     const addToCartButtons = page.locator('button:has-text("Add to cart"), button:has-text("Add")');
-    await expect(addToCartButtons).toHaveCount(await addToCartButtons.count(), { timeout: 10_000 });
     const initialCount = await addToCartButtons.count();
     expect(initialCount).toBeGreaterThanOrEqual(2);
 
@@ -69,7 +65,6 @@ test.describe("Multi-item Cart Journey", () => {
 
     // ─── STEP 4: Authenticate — cart MUST survive auth boundary ───
     await authenticateWithSSR(page, state.email, state.password);
-
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     const cartItemsAfterAuth = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
@@ -92,25 +87,33 @@ test.describe("Multi-item Cart Journey", () => {
     // ─── STEP 6: Must redirect to account order page (not stay on checkout) ───
     await expect(page).toHaveURL(/\/en\/account\/orders\//, { timeout: 30_000 });
 
-    // ─── STEP 7: Order detail must show 2 items ───
+    // ─── STEP 7: Order detail must show 2 items with correct breakdown ───
     await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
-    // The order detail page should contain item breakdown info
-    await expect(page.locator("main")).toContainText(/angle|ângulo/i, { timeout: 10_000 });
+    const orderItemsList = page.locator('[data-testid="order-items-list"]');
+    await expect(orderItemsList).toBeVisible({ timeout: 10_000 });
+
+    const orderItemEntries = page.locator('[data-testid^="order-item-"]');
+    await expect(orderItemEntries).toHaveCount(2, { timeout: 10_000 });
+
+    // Verify specific item breakdowns: one 3-angle and one 1-angle
+    await expect(page.locator("main")).toContainText(/3.*angle|3.*ângulo/i);
+    await expect(page.locator("main")).toContainText(/1.*angle|1.*ângulo/i);
+
+    // Total knives = 2, total output images = 4
+    await expect(page.locator("main")).toContainText(/2/);
+    await expect(page.locator("main")).toContainText(/4/);
+
+    // Total monetary value present
+    await expect(page.locator("main")).toContainText(/\$|R\$/);
 
     // ─── STEP 8: Cart MUST be empty after successful order ───
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
-    // Cart should now be empty — either shows empty state or 0 items
     const cartItemsAfterOrder = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(cartItemsAfterOrder).toHaveCount(0, { timeout: 10_000 });
-
-    await context.close();
   });
 
-  test("EN currency preservation: services?currency=BRL → cart shows BRL", async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    const page = await context.newPage();
-
+  test("EN currency preservation: services?currency=BRL → cart shows BRL", async ({ page }) => {
     // Navigate to services with explicit BRL currency
     await page.goto("/en/services?currency=BRL");
     await expect(page.locator("h1")).toContainText(/services/i);
@@ -140,14 +143,9 @@ test.describe("Multi-item Cart Journey", () => {
       const href = await continueLink.first().getAttribute("href");
       expect(href).toContain("currency=BRL");
     }
-
-    await context.close();
   });
 
-  test("PT locale: carrinho multi-item funciona em português", async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    const page = await context.newPage();
-
+  test("PT locale: carrinho multi-item funciona em português", async ({ page }) => {
     await page.goto("/pt/servicos");
     await expect(page.locator("h1")).toContainText(/servi/i);
 
@@ -164,14 +162,9 @@ test.describe("Multi-item Cart Journey", () => {
 
     const items = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(items).toHaveCount(2, { timeout: 10_000 });
-
-    await context.close();
   });
 
-  test("PT currency preservation: servicos?currency=USD → carrinho mostra USD", async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    const page = await context.newPage();
-
+  test("PT currency preservation: servicos?currency=USD → carrinho mostra USD", async ({ page }) => {
     // Navigate to PT services with explicit USD currency
     await page.goto("/pt/servicos?currency=USD");
     await expect(page.locator("h1")).toContainText(/servi/i);
@@ -194,7 +187,5 @@ test.describe("Multi-item Cart Journey", () => {
 
     // Price must be displayed in USD format ($)
     await expect(page.locator("main")).toContainText(/\$/, { timeout: 5_000 });
-
-    await context.close();
   });
 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
 import { getActivePlanWithPrice } from "@/services/plans";
+import { fetchDeliveryEstimate } from "@/services/delivery-estimate";
 import type { Currency } from "@/types/database";
 
 // O carrinho do browser envia apenas intenção (planId + quantity + moeda);
@@ -40,14 +40,38 @@ export async function POST(request: Request): Promise<NextResponse> {
         const plan = await getActivePlanWithPrice(item.planId, currency);
         return {
           planId: item.planId,
+          quantity: item.quantity,
           angles: plan ? plan.plan.angles : 0,
           priceCents: plan ? plan.priceCents : null,
         };
       } catch {
-        return { planId: item.planId, angles: 0, priceCents: null };
+        return {
+          planId: item.planId,
+          quantity: item.quantity,
+          angles: 0,
+          priceCents: null,
+        };
       }
     }),
   );
 
-  return NextResponse.json({ items });
+  // Server-authoritative totalImages: sum of (quantity * angles) per item.
+  // The browser must NOT compute this for display or checkout submission.
+  const totalImages = items.reduce(
+    (sum, item) => sum + item.quantity * item.angles,
+    0,
+  );
+
+  // Delivery estimate is server-side authoritative. If it fails, we still
+  // return pricing — the UI shows "estimate unavailable" without blocking.
+  let estimate: Awaited<ReturnType<typeof fetchDeliveryEstimate>> | null = null;
+  if (totalImages > 0) {
+    try {
+      estimate = await fetchDeliveryEstimate(totalImages);
+    } catch {
+      // Non-fatal: cart checkout renders estimateUnavailable label.
+    }
+  }
+
+  return NextResponse.json({ items, totalImages, estimate });
 }

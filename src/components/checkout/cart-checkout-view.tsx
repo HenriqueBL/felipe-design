@@ -15,8 +15,20 @@ import CreateCartOrderForm from "./create-cart-order-form";
 
 export interface CartPricingItem {
   planId: string;
+  quantity: number;
   angles: number;
   priceCents: number | null;
+}
+
+export interface CartPricingResponse {
+  items: Map<string, CartPricingItem>;
+  totalImages: number;
+  estimate: {
+    estimated_turnaround_days: number;
+    business_days_after_ready: number;
+    backlog_note: string | null;
+    deadline_note: string | null;
+  } | null;
 }
 
 interface CartCheckoutLabels {
@@ -63,10 +75,12 @@ function formatMoney(cents: number, currency: Currency, intlLocale: string): str
   return new Intl.NumberFormat(intlLocale, { style: "currency", currency }).format(cents / 100);
 }
 
-async function fetchCartPricing(
-  cart: Cart,
-): Promise<Map<string, CartPricingItem>> {
-  const result = new Map<string, CartPricingItem>();
+async function fetchCartPricing(cart: Cart): Promise<CartPricingResponse> {
+  const empty: CartPricingResponse = {
+    items: new Map(),
+    totalImages: 0,
+    estimate: null,
+  };
   try {
     const response = await fetch("/api/cart-pricing", {
       method: "POST",
@@ -74,16 +88,26 @@ async function fetchCartPricing(
       body: JSON.stringify({ items: cart.items, currency: cart.currency }),
     });
     if (!response.ok) {
-      return result;
+      return empty;
     }
-    const data = (await response.json()) as { items: CartPricingItem[] };
+    const data = (await response.json()) as {
+      items?: CartPricingItem[];
+      totalImages?: number;
+      estimate?: CartPricingResponse["estimate"];
+    };
+    const map = new Map<string, CartPricingItem>();
     for (const item of data.items ?? []) {
-      result.set(item.planId, item);
+      map.set(item.planId, item);
     }
+    return {
+      items: map,
+      totalImages: typeof data.totalImages === "number" ? data.totalImages : 0,
+      estimate: data.estimate ?? null,
+    };
   } catch {
     // Rede indisponivel: sem precos; o RPC revalida de qualquer forma.
+    return empty;
   }
-  return result;
 }
 
 export default function CartCheckoutView({
@@ -95,6 +119,8 @@ export default function CartCheckoutView({
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [pricing, setPricing] = useState<Map<string, CartPricingItem>>(new Map());
+  const [serverTotalImages, setServerTotalImages] = useState<number>(0);
+  const [estimate, setEstimate] = useState<CartPricingResponse["estimate"]>(null);
   const [loaded, setLoaded] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>("");
 
@@ -102,9 +128,14 @@ export default function CartCheckoutView({
     setCart(current);
     if (!current) {
       setPricing(new Map());
+      setServerTotalImages(0);
+      setEstimate(null);
       return;
     }
-    setPricing(await fetchCartPricing(current));
+    const response = await fetchCartPricing(current);
+    setPricing(response.items);
+    setServerTotalImages(response.totalImages);
+    setEstimate(response.estimate);
   }, []);
 
   useEffect(() => {
@@ -144,10 +175,9 @@ export default function CartCheckoutView({
     const price = pricing.get(item.planId)?.priceCents;
     return price == null ? sum : sum + price * item.quantity;
   }, 0);
-  const totalImages = cart.items.reduce(
-    (sum, item) => sum + item.quantity * (pricing.get(item.planId)?.angles ?? 0),
-    0,
-  );
+  // Server-authoritative totalImages from cart-pricing API; never trust
+  // client-side computation for checkout submission or display.
+  const totalImages = serverTotalImages;
   const allPriced = cart.items.every(
     (item) => pricing.get(item.planId)?.priceCents != null,
   );
@@ -205,6 +235,25 @@ export default function CartCheckoutView({
               <span>{formatMoney(totalCents, cart.currency, intlLocale)}</span>
             </div>
           </div>
+          {estimate ? (
+            <div className="estimate-panel">
+              <p>
+                <strong>{labels.estimatedTurnaround}:</strong>{" "}
+                {estimate.estimated_turnaround_days}{" "}
+                {estimate.estimated_turnaround_days === 1
+                  ? labels.businessDaysAfterReady.replace(/s$/, "")
+                  : labels.businessDaysAfterReady}
+              </p>
+              {estimate.backlog_note ? (
+                <p className="note">{estimate.backlog_note}</p>
+              ) : null}
+              {estimate.deadline_note ? (
+                <p className="note">{estimate.deadline_note}</p>
+              ) : null}
+            </div>
+          ) : totalImages > 0 ? (
+            <p className="form-status note">{labels.estimateUnavailable}</p>
+          ) : null}
         </section>
 
         <section className="auth-panel">
