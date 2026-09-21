@@ -68,10 +68,10 @@ export default function PortfolioCreateForm({
           {isPending ? labels.pending : labels.button}
         </button>
         {state?.success === true ? (
-          <span className="form-status ok"> {state.message ?? labels.success}</span>
+          <span className="form-status ok"> {labels.success}</span>
         ) : null}
         {state?.success === false ? (
-          <span className="form-status err"> {state.message ?? labels.error}</span>
+          <span className="form-status err"> {labels.error}</span>
         ) : null}
       </form>
     </section>

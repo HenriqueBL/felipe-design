@@ -37,6 +37,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Server Actions precisam aceitar uploads de até 10 MB + overhead multipart.
+  // O limite de 12 MB é intencional; a validação de arquivo continua em 10 MB
+  // no domínio da aplicação (validateUploadFile).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
   images: {
     // Imagens publicas do portfolio vem do bucket publico do Supabase.
     remotePatterns: [

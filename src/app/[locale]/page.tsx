@@ -23,9 +23,11 @@ export default async function HomePage({
 
   const featured = await getFeaturedPortfolioItem();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  // Usa resolvedMediaPath (image → after → before) para suportar itens
+  // novos e legacy sem duplicar paths artificialmente.
   const heroSrc =
-    featured && featured.imageStoragePath && supabaseUrl
-      ? portfolioPublicUrl(supabaseUrl, featured.imageStoragePath)
+    featured && featured.resolvedMediaPath && supabaseUrl
+      ? portfolioPublicUrl(supabaseUrl, featured.resolvedMediaPath)
       : HERO_FALLBACK_SRC;
   const heroAlt = featured ? featured.title : dictionary.home.heroTitle;
 

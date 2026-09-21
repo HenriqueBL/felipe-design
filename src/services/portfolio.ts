@@ -9,14 +9,36 @@ export interface PublicPortfolioItem {
   title: string;
   description: string | null;
   imageStoragePath: string | null;
-  beforeStoragePath: string;
-  afterStoragePath: string;
+  beforeStoragePath: string | null;
+  afterStoragePath: string | null;
+  /** Caminho de mídia resolvido para renderização (hero, gallery, thumb). */
+  resolvedMediaPath: string | null;
   featured: boolean;
   sortOrder: number;
 }
 
+/**
+ * Resolve a imagem principal de um item do portfolio com fallback seguro:
+ * 1. image_storage_path (modelo novo)
+ * 2. after_storage_path (legacy: resultado final)
+ * 3. before_storage_path (legacy: último recurso)
+ * Retorna null quando o item não possui nenhuma mídia válida.
+ */
+export function resolvePortfolioMedia(item: {
+  imageStoragePath: string | null;
+  beforeStoragePath: string | null;
+  afterStoragePath: string | null;
+}): string | null {
+  return (
+    item.imageStoragePath ??
+    item.afterStoragePath ??
+    item.beforeStoragePath ??
+    null
+  );
+}
+
 function toPublicItem(row: PortfolioItemRow): PublicPortfolioItem {
-  return {
+  const item = {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -25,6 +47,10 @@ function toPublicItem(row: PortfolioItemRow): PublicPortfolioItem {
     afterStoragePath: row.after_storage_path,
     featured: row.featured,
     sortOrder: row.sort_order,
+  };
+  return {
+    ...item,
+    resolvedMediaPath: resolvePortfolioMedia(item),
   };
 }
 

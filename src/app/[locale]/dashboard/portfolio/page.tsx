@@ -4,6 +4,7 @@ import { requireEnv } from "@/lib/env";
 import {
   listAllPortfolioItems,
   portfolioPublicUrl,
+  resolvePortfolioMedia,
 } from "@/services/portfolio";
 import PortfolioCreateForm from "@/components/dashboard/portfolio-create-form";
 import PortfolioItemForm from "@/components/dashboard/portfolio-item-form";
@@ -52,8 +53,19 @@ export default async function DashboardPortfolioPage({
             locale={current}
             item={item}
             imageUrl={
-              item.image_storage_path
-                ? portfolioPublicUrl(supabaseUrl, item.image_storage_path)
+              resolvePortfolioMedia({
+                imageStoragePath: item.image_storage_path,
+                beforeStoragePath: item.before_storage_path,
+                afterStoragePath: item.after_storage_path,
+              })
+                ? portfolioPublicUrl(
+                    supabaseUrl,
+                    resolvePortfolioMedia({
+                      imageStoragePath: item.image_storage_path,
+                      beforeStoragePath: item.before_storage_path,
+                      afterStoragePath: item.after_storage_path,
+                    })!,
+                  )
                 : null
             }
             labels={{
@@ -63,9 +75,15 @@ export default async function DashboardPortfolioPage({
               imageHint: d.portfolioItemImageHint,
               sortOrder: d.portfolioItemSortOrder,
               published: d.portfolioItemPublished,
+              unpublished: d.portfolioActionUnpublished,
               featured: d.portfolioItemFeatured,
+              featuredSet: d.portfolioActionFeaturedSet,
+              featuredCleared: d.portfolioActionFeaturedCleared,
               save: d.portfolioUpdateButton,
               saving: d.portfolioUpdating,
+              updated: d.portfolioActionUpdated,
+              reordered: d.portfolioActionReordered,
+              deleted: d.portfolioActionDeleted,
               error: d.saveError,
               publish: d.portfolioPublish,
               unpublish: d.portfolioUnpublish,

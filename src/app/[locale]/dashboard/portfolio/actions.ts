@@ -8,13 +8,37 @@ import { isAdminUser } from "@/services/auth";
 import { PORTFOLIO_BUCKET } from "@/services/portfolio";
 import type { PortfolioItemUpdate } from "@/types/database";
 
+/**
+ * Códigos estáveis retornados pelas actions. O componente admin mapeia
+ * para textos localizados (EN/PT); o backend nunca retorna texto traduzido.
+ */
+export type PortfolioActionCode =
+  | "forbidden"
+  | "invalid_input"
+  | "image_required"
+  | "image_invalid"
+  | "create_failed"
+  | "update_failed"
+  | "publish_failed"
+  | "featured_failed"
+  | "clear_featured_failed"
+  | "reorder_failed"
+  | "not_found"
+  | "delete_failed"
+  | "created"
+  | "updated"
+  | "published"
+  | "unpublished"
+  | "featured_set"
+  | "featured_cleared"
+  | "reordered"
+  | "deleted";
+
 export interface PortfolioActionResult {
   success: boolean;
-  message?: string;
+  code: PortfolioActionCode;
 }
 
-// Validacoes espelham as restricoes do banco: title obrigatorio,
-// description opcional, sort_order inteiro nao-negativo.
 const createSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional(),
@@ -49,7 +73,6 @@ async function uploadPortfolioImage(file: File): Promise<string | null> {
   if (!validation.ok) {
     return null;
   }
-  // Caminho previsivel com UUID: nunca confiar no filename do usuario.
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const storagePath = `items/${crypto.randomUUID()}.${extension}`;
   const supabase = await createSupabaseServerClient();
@@ -62,13 +85,54 @@ async function uploadPortfolioImage(file: File): Promise<string | null> {
   return storagePath;
 }
 
+/**
+ * Verifica se um storage path ainda é referenciado por qualquer outro
+ * portfolio_item (em image/before/after). Usado antes de remover objetos
+ * do Storage para evitar quebrar mídia de outros itens.
+ */
+async function isStoragePathReferenced(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  path: string,
+  excludeItemId?: string,
+): Promise<boolean> {
+  let query = supabase
+    .from("portfolio_items")
+    .select("id")
+    .or(
+      `image_storage_path.eq.${path},before_storage_path.eq.${path},after_storage_path.eq.${path}`,
+    )
+    .limit(1);
+  if (excludeItemId) {
+    query = query.neq("id", excludeItemId);
+  }
+  const { data } = await query;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Remove um objeto do Storage somente se nenhum outro portfolio_item
+ * referencia aquele path. Best-effort: falhas de remoção não quebram
+ * a operação principal.
+ */
+async function safeRemoveStorageObject(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  path: string | null,
+  excludeItemId?: string,
+): Promise<void> {
+  if (!path) return;
+  const referenced = await isStoragePathReferenced(supabase, path, excludeItemId);
+  if (!referenced) {
+    await supabase.storage.from(PORTFOLIO_BUCKET).remove([path]);
+  }
+}
+
 export async function createPortfolioItemAction(
   locale: string,
   _prevState: PortfolioActionResult | null,
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsed = createSchema.safeParse({
@@ -78,29 +142,29 @@ export async function createPortfolioItemAction(
     published: formData.get("published") === "on" || formData.get("published") === "true",
   });
   if (!parsed.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const file = formData.get("image");
   if (!(file instanceof File) || file.size === 0) {
-    return { success: false, message: "Image is required." };
+    return { success: false, code: "image_required" };
   }
   const storagePath = await uploadPortfolioImage(file);
   if (storagePath === null) {
-    return { success: false, message: "Invalid image (type/extension/size)." };
+    return { success: false, code: "image_invalid" };
   }
 
   const supabase = await createSupabaseServerClient();
-  // before/after continuam obrigatorios no banco: item novo sem o par
-  // usa a mesma imagem nos tres campos, mantendo UI e compatibilidade.
+  // Novo modelo: item simples usa apenas image_storage_path.
+  // before/after ficam NULL (migration 0021 relaxou NOT NULL).
   const { data, error } = await supabase
     .from("portfolio_items")
     .insert({
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       image_storage_path: storagePath,
-      before_storage_path: storagePath,
-      after_storage_path: storagePath,
+      before_storage_path: null,
+      after_storage_path: null,
       published: parsed.data.published,
       sort_order: parsed.data.sortOrder,
     })
@@ -108,13 +172,12 @@ export async function createPortfolioItemAction(
     .single();
 
   if (error || !data) {
-    // Nao deixar storage orfao quando o insert falha.
     await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
-    return { success: false, message: "Could not create portfolio item." };
+    return { success: false, code: "create_failed" };
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Portfolio item created." };
+  return { success: true, code: "created" };
 }
 
 export async function updatePortfolioItemAction(
@@ -123,7 +186,7 @@ export async function updatePortfolioItemAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsed = updateSchema.safeParse({
@@ -133,7 +196,7 @@ export async function updatePortfolioItemAction(
     sortOrder: formData.get("sortOrder"),
   });
   if (!parsed.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -147,28 +210,33 @@ export async function updatePortfolioItemAction(
   if (file instanceof File && file.size > 0) {
     const storagePath = await uploadPortfolioImage(file);
     if (storagePath === null) {
-      return { success: false, message: "Invalid image (type/extension/size)." };
+      return { success: false, code: "image_invalid" };
     }
-    // Capturar caminho antigo para limpeza pos-update.
+    // Capturar paths antigos para limpeza segura pós-update.
     const { data: existing } = await supabase
       .from("portfolio_items")
       .select("image_storage_path, before_storage_path, after_storage_path")
       .eq("id", parsed.data.id)
       .maybeSingle();
+
+    // Atualizar SOMENTE image_storage_path. Não sobrescrever before/after
+    // para preservar itens legacy que usam o par before+after.
     updates.image_storage_path = storagePath;
-    updates.before_storage_path = storagePath;
-    updates.after_storage_path = storagePath;
+
     const { error } = await supabase
       .from("portfolio_items")
       .update(updates)
       .eq("id", parsed.data.id);
     if (error) {
       await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
-      return { success: false, message: "Could not update portfolio item." };
+      return { success: false, code: "update_failed" };
     }
-    // Remover imagem antiga apenas se nao for referenciada por outro campo.
-    if (existing?.image_storage_path && existing.image_storage_path !== storagePath) {
-      await supabase.storage.from(PORTFOLIO_BUCKET).remove([existing.image_storage_path]);
+
+    // Limpeza segura: remover imagem antiga apenas se não for referenciada
+    // por before/after do próprio item ou por qualquer outro item.
+    const oldPath = existing?.image_storage_path;
+    if (oldPath && oldPath !== storagePath) {
+      await safeRemoveStorageObject(supabase, oldPath, parsed.data.id);
     }
   } else {
     const { error } = await supabase
@@ -176,12 +244,12 @@ export async function updatePortfolioItemAction(
       .update(updates)
       .eq("id", parsed.data.id);
     if (error) {
-      return { success: false, message: "Could not update portfolio item." };
+      return { success: false, code: "update_failed" };
     }
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Portfolio item updated." };
+  return { success: true, code: "updated" };
 }
 
 export async function togglePortfolioPublishAction(
@@ -190,13 +258,13 @@ export async function togglePortfolioPublishAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsedId = idSchema.safeParse(formData.get("id"));
   const published = formData.get("published") === "true";
   if (!parsedId.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -205,11 +273,11 @@ export async function togglePortfolioPublishAction(
     .update({ published })
     .eq("id", parsedId.data);
   if (error) {
-    return { success: false, message: "Could not update publication." };
+    return { success: false, code: "publish_failed" };
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: published ? "Item published." : "Item unpublished." };
+  return { success: true, code: published ? "published" : "unpublished" };
 }
 
 export async function setPortfolioFeaturedAction(
@@ -218,25 +286,24 @@ export async function setPortfolioFeaturedAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsedId = idSchema.safeParse(formData.get("id"));
   if (!parsedId.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
-  // RPC transacional: garante no maximo um featured no banco.
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.rpc("set_portfolio_featured", {
     target_id: parsedId.data,
   });
   if (error) {
-    return { success: false, message: "Could not set featured." };
+    return { success: false, code: "featured_failed" };
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Featured updated." };
+  return { success: true, code: "featured_set" };
 }
 
 export async function clearPortfolioFeaturedAction(
@@ -245,12 +312,12 @@ export async function clearPortfolioFeaturedAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsedId = idSchema.safeParse(formData.get("id"));
   if (!parsedId.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -259,11 +326,11 @@ export async function clearPortfolioFeaturedAction(
     .update({ featured: false })
     .eq("id", parsedId.data);
   if (error) {
-    return { success: false, message: "Could not clear featured." };
+    return { success: false, code: "clear_featured_failed" };
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Featured removed." };
+  return { success: true, code: "featured_cleared" };
 }
 
 export async function movePortfolioItemAction(
@@ -272,13 +339,13 @@ export async function movePortfolioItemAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsedId = idSchema.safeParse(formData.get("id"));
   const parsedOrder = sortOrderSchema.safeParse(formData.get("sortOrder"));
   if (!parsedId.success || !parsedOrder.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -287,11 +354,11 @@ export async function movePortfolioItemAction(
     .update({ sort_order: parsedOrder.data })
     .eq("id", parsedId.data);
   if (error) {
-    return { success: false, message: "Could not reorder." };
+    return { success: false, code: "reorder_failed" };
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Order updated." };
+  return { success: true, code: "reordered" };
 }
 
 export async function deletePortfolioItemAction(
@@ -300,12 +367,12 @@ export async function deletePortfolioItemAction(
   formData: FormData,
 ): Promise<PortfolioActionResult> {
   if (!(await isAdminUser())) {
-    return { success: false, message: "Forbidden." };
+    return { success: false, code: "forbidden" };
   }
 
   const parsedId = idSchema.safeParse(formData.get("id"));
   if (!parsedId.success) {
-    return { success: false, message: "Invalid input." };
+    return { success: false, code: "invalid_input" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -315,7 +382,7 @@ export async function deletePortfolioItemAction(
     .eq("id", parsedId.data)
     .maybeSingle();
   if (!existing) {
-    return { success: false, message: "Item not found." };
+    return { success: false, code: "not_found" };
   }
 
   const { error } = await supabase
@@ -323,18 +390,21 @@ export async function deletePortfolioItemAction(
     .delete()
     .eq("id", parsedId.data);
   if (error) {
-    return { success: false, message: "Could not delete." };
+    return { success: false, code: "delete_failed" };
   }
 
-  // Limpeza pos-delete: somente caminhos que pertenciam ao item.
-  const paths = new Set(
-    [existing.image_storage_path, existing.before_storage_path, existing.after_storage_path]
-      .filter((p): p is string => typeof p === "string"),
-  );
-  if (paths.size > 0) {
-    await supabase.storage.from(PORTFOLIO_BUCKET).remove([...paths]);
+  // Limpeza segura pós-delete: remover cada path apenas se nenhum outro
+  // item o referencia. O próprio item já foi deletado, então excludeItemId
+  // não é necessário — a query de verificação já não o encontrará.
+  const paths = [
+    existing.image_storage_path,
+    existing.before_storage_path,
+    existing.after_storage_path,
+  ];
+  for (const p of paths) {
+    await safeRemoveStorageObject(supabase, p);
   }
 
   revalidatePublicPages(locale);
-  return { success: true, message: "Item deleted." };
+  return { success: true, code: "deleted" };
 }
