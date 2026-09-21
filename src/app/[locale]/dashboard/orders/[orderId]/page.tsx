@@ -28,7 +28,7 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  const { order, customerEmail, planAngles, sourceImages, resultImages, revisions } = detail;
+  const { order, items, customerEmail, planAngles, sourceImages, resultImages, revisions } = detail;
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   return (
@@ -38,12 +38,43 @@ export default async function OrderDetailPage({
       <div className="panel">
         <h2>{dictionary.dashboard.customerLabel}</h2>
         <p>{customerEmail ?? order.user_id}</p>
-        <h2>{dictionary.dashboard.orderPlan}</h2>
-        <p>
-          {planAngles ?? "-"} {dictionary.services.anglesLabel}
-        </p>
-        <h2>{dictionary.dashboard.orderQuantity}</h2>
-        <p>{order.knife_quantity}</p>
+
+        {items.length > 0 ? (
+          <>
+            <h2>{dictionary.dashboard.orderItemsTitle}</h2>
+            <ul className="admin-order-items">
+              {items.map((item) => (
+                <li key={item.id} className="admin-order-item">
+                  <p>
+                    <strong>{dictionary.dashboard.itemLabel(item.item_index)}</strong> —{" "}
+                    {item.angles} {dictionary.services.anglesLabel},{" "}
+                    {item.knife_quantity} {item.knife_quantity === 1 ? dictionary.dashboard.knifeSingular : dictionary.dashboard.knifePlural}
+                  </p>
+                  <p>
+                    {dictionary.dashboard.itemUnitPrice}:{" "}
+                    {formatMoney(item.unit_price_cents, order.currency, intlLocale)} ·{" "}
+                    {dictionary.dashboard.itemSubtotal}:{" "}
+                    {formatMoney(item.subtotal_cents, order.currency, intlLocale)}
+                  </p>
+                  <p>
+                    {dictionary.dashboard.itemImages}: {item.total_images} ·{" "}
+                    {dictionary.dashboard.itemKnifeRange}: {item.knife_index_start}–{item.knife_index_start + item.knife_quantity - 1}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <>
+            <h2>{dictionary.dashboard.orderPlan}</h2>
+            <p>
+              {planAngles ?? "-"} {dictionary.services.anglesLabel}
+            </p>
+            <h2>{dictionary.dashboard.orderQuantity}</h2>
+            <p>{order.knife_quantity}</p>
+          </>
+        )}
+
         <h2>{dictionary.dashboard.orderImages}</h2>
         <p>{order.total_images}</p>
         <h2>{dictionary.dashboard.snapshotPrice}</h2>

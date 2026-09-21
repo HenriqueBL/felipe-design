@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run typecheck` — `tsc --noEmit`; must pass with zero errors before commit
 - `npm test` — Vitest run (business rules: pricing, business-days, queue)
 - `npx vitest tests/queue.test.ts` — run a single test file
-- `supabase db push` — apply migrations in order (0001 through 0011)
+- `supabase db push` — apply pending migrations in version order
 
 ## Architecture
 
@@ -33,6 +33,10 @@ Implemented identically in TypeScript (`src/services/queue.ts`, pre-purchase est
 ### Source photo intake (migrations 0008-0011)
 
 Source photos are INPUT (client material); `total_images` remains the OUTPUT workload unit. Photos live in `order_images` with `kind='source'` and `knife_index` (1..`knife_quantity`). New orders snapshot the upload policy (`required/max_source_photos_per_knife`, `max_source_photo_size_mb`) at `create_order`; admin settings changes affect only new orders. Readiness (v3): `paid_at IS NOT NULL` AND `source_photos_submitted_at IS NOT NULL` AND every knife meets its minimum. Reaching the minimum does NOT close intake — the client must click "Finish photo submission" (`submit_source_photos`), after which intake is read-only. Both event orders (payment→photos→submit and photos→submit→payment) are supported. `register_source_image` (idempotent by `storage_path`) is the only client path for source inserts; deletes via `delete_source_image` while intake is open. Browser uploads go directly to Supabase Storage via TUS (bucket `client-uploads` stays private; thumbnails served via signed URLs; service role never reaches the browser). Admin order detail shows source photos grouped by knife.
+
+### Multi-item cart (migration 0017)
+
+One order can contain multiple plan/angle configurations. `order_items` stores one row per line with immutable snapshots (angles, unit_price_cents, subtotal_cents, total_images) and a global knife index range `[knife_index_start, knife_index_start + knife_quantity - 1]`. Legacy orders are backfilled with a single item; `orders.plan_id` is now nullable for multi-item orders. Frontend cart (`localStorage["felipe-cart-v1"]`) holds only intent: `{ currency, items: [{ planId, quantity }] }` — prices/totals are never stored client-side. `/api/cart-pricing` revalidates prices server-side for display; `create_cart_order` RPC is the sole authority at purchase (validates plans, snapshots prices, computes totals atomically). Source photo intake validates `knife_index` against item ranges; queue workload uses `orders.total_images` (sum of item outputs), never source photo count. See `docs/database.md` §Multi-item for schema details.
 
 ### Payments
 

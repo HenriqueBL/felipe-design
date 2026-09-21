@@ -130,8 +130,11 @@ export default async function ServicesPage({
                     priceAvailable={price !== null}
                     labels={{
                       quantityLabel: dictionary.services.quantityLabel,
-                      choose: dictionary.services.choose,
+                      addToCart: dictionary.cart.addToCart,
+                      addedToCart: dictionary.cart.addedToCart,
+                      viewCart: dictionary.cart.viewCart,
                       unavailable: dictionary.services.unavailable,
+                      maxKnivesError: dictionary.cart.maxKnivesError,
                     }}
                   />
                 </article>

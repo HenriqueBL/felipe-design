@@ -4,12 +4,19 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getCurrentUser } from "@/services/auth";
-import { createOrder, OrderCreationError } from "@/services/order-creation";
+import {
+  createOrder,
+  createCartOrder,
+  OrderCreationError,
+} from "@/services/order-creation";
+import { parseCartIntent } from "@/domain/checkout";
 import { accountOrderPath, checkoutPath, loginPath } from "@/lib/paths";
 
 export interface CreateOrderResult {
   success: boolean;
   errorCode?: string;
+  orderId?: string;
+  redirectUrl?: string;
 }
 
 // O browser envia apenas a intencao: plano, quantidade, moeda e chave de
@@ -93,6 +100,72 @@ export async function createOrderAction(
   if (createdOrderId !== null) {
     revalidatePath("/" + current + "/account");
     redirect(accountOrderPath(current, createdOrderId));
+  }
+
+  return { success: false, errorCode: errorCode ?? "UNKNOWN" };
+}
+
+// Cart checkout: browser envia apenas itens (planId+qty), moeda e chave.
+// Preco/total/images sao resolvidos atomicamente no RPC create_cart_order.
+// Carrinho local e limpo somente apos criacao bem-sucedida.
+export async function createCartOrderAction(
+  locale: string,
+  _prevState: CreateOrderResult | null,
+  formData: FormData,
+): Promise<CreateOrderResult> {
+  const rawItems = formData.get("items");
+  let parsedItems: unknown[] = [];
+  if (typeof rawItems === "string") {
+    try {
+      parsedItems = JSON.parse(rawItems);
+    } catch {
+      return { success: false, errorCode: "INVALID_INPUT" };
+    }
+  }
+
+  const intent = parseCartIntent({
+    items: parsedItems,
+    currency: formData.get("currency"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+
+  if (!intent) {
+    return { success: false, errorCode: "INVALID_INPUT" };
+  }
+
+  const current = safeLocale(locale);
+  const user = await getCurrentUser();
+
+  if (!user) {
+    // Preserva carrinho no localStorage; apos login o usuario volta ao
+    // checkout com ?cart=1 e os itens continuam la.
+    redirect(loginPath(current, checkoutPath(current) + "?cart=1"));
+  }
+
+  let createdOrderId: string | null = null;
+  let errorCode: string | undefined;
+
+  try {
+    const order = await createCartOrder({
+      items: intent.items.map((item) => ({
+        planId: item.planId,
+        quantity: item.quantity,
+      })),
+      currency: intent.currency,
+      idempotencyKey: intent.idempotencyKey,
+    });
+    createdOrderId = order.id;
+  } catch (error) {
+    errorCode = error instanceof OrderCreationError ? error.code : "UNKNOWN";
+  }
+
+  if (createdOrderId !== null) {
+    revalidatePath("/" + current + "/account");
+    return {
+      success: true,
+      orderId: createdOrderId,
+      redirectUrl: accountOrderPath(current, createdOrderId),
+    };
   }
 
   return { success: false, errorCode: errorCode ?? "UNKNOWN" };

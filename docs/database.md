@@ -1,6 +1,6 @@
 # Banco de dados - Felipe Design
 
-> Migrations versionadas em `supabase/migrations`. Nomes em snake_case; aplicar com `supabase db push` ou SQL Editor na ordem 0001-0011.
+> Migrations versionadas em `supabase/migrations`; aplicar migrations pendentes em ordem de versão com `supabase db push` ou SQL Editor.
 
 ## Enumerações
 
@@ -61,6 +61,24 @@ Buckets: `client-uploads` e `order-results` **privados**; `portfolio` público. 
 - `delete_source_image(p_image_id)` (auth): remove source photo com intake aberto; devolve `storage_path` para o cliente remover o objeto do Storage.
 - `submit_source_photos(p_order_id)` (auth): finalização explícita do intake ("Finish photo submission"); exige o mínimo por faca em todas as facas; idempotente; chama `maybe_mark_order_ready`.
 - `maybe_mark_order_ready` (0008): regra v3 de production-ready — ver `docs/queue-and-deadline.md`.
+
+## Multi-item orders e carrinho (migration 0017)
+
+- `order_items`: uma row por linha de carrinho (plan × knife_quantity). Colunas: `order_id`, `item_index` (1..n), `plan_id`, `knife_quantity`, `angles` (snapshot), `unit_price_cents`, `subtotal_cents`, `total_images`, `knife_index_start`. Cada item possui um range global de facas `[knife_index_start, knife_index_start + knife_quantity - 1]`; `order_images.knife_index` continua sendo um índice global único (1..`orders.knife_quantity`). Constraints: `order_items_subtotal_matches` (subtotal = unitário × qty), `order_items_images_matches` (total_images = qty × angles), unicidade por `(order_id, item_index)` e `(order_id, knife_index_start)`.
+- `orders.plan_id` agora é nullable: pedidos multi-item não têm um único plano; pedidos legados e single-item continuam preenchendo a coluna. As constraints `orders_subtotal_matches` e `orders_total_matches` foram removidas (igualdade agora garantida transacionalmente no RPC e pelas checks por item).
+- Backfill idempotente: todo pedido legado sem `order_items` recebe exatamente um item (item_index 1, knife_index_start 1) com snapshots copiados da própria ordem e ângulos do plano original.
+- `create_cart_order(p_items jsonb, p_currency, p_affiliate_code?, p_idempotency_key?)` (auth): criação atômica de pedido multi-item. Valida 1..20 linhas, qty 1..100, planos ativos, preços vigentes; computa totais e total_images; insere order + items em uma transação. Idempotência por `(idempotency_key, user_id)` com retry-select em `unique_violation`. Códigos de erro: `NOT_AUTHENTICATED`, `INVALID_ITEMS`, `PLAN_NOT_FOUND`, `PRICE_NOT_FOUND`, `IDEMPOTENCY_CONFLICT`.
+- `register_source_image` (atualizado): valida `knife_index` contra ranges de `order_items` quando existem; fallback para check legado (1..`knife_quantity`) se não houver itens (defensivo — backfill garante que sempre existe pelo menos um item).
+- RLS em `order_items`: select próprio ou admin (via join com `orders.user_id`); escrita apenas por RPCs `security definer`.
+
+### Price snapshot consistency (migration 0018)
+
+- `create_cart_order` reescrito para validar e materializar preços em uma temp table `_cart_validated_items` em uma única passagem. Order e items são inseridos exclusivamente a partir desse snapshot; não há segunda leitura de `plan_prices` após a criação do pedido. Isso elimina a janela de concorrência em que `orders.total_cents` poderia refletir um preço diferente de `order_items.subtotal_cents`.
+- `orders.plan_id`: NULL para pedidos multi-item (>1 item); mantém o `plan_id` apenas para pedidos single-item. `order_items` é a autoridade exclusiva de composição; nenhum reader deve interpretar `orders.plan_id` como "o plano do pedido inteiro" quando existem múltiplos itens.
+
+### Aggregate knife limit guard (migration 0019)
+
+- `create_cart_order` agora valida `v_total_knives <= 100` antes de qualquer escrita, levantando `INVALID_ITEMS` se o total agregado exceder o limite. Isso alinha o RPC com a constante `CART_MAX_TOTAL_KNIVES = 100` em `src/domain/cart.ts` e evita erros genéricos de CHECK constraint no banco. O frontend (`addToCart`/`updateQuantity` em `cart-store.ts`) rejeita deterministicamente operações que excederiam o limite, preservando itens existentes sem mutação silenciosa; `normalizeCart` é puramente estrutural (deduplicação e cap por item).
 
 ## Segurança adicional
 

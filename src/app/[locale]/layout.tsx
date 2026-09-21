@@ -14,6 +14,7 @@ import {
 } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
 import AuthNav from "@/components/auth-nav";
+import CartBadge from "@/components/cart/cart-badge";
 import "../globals.css";
 
 export function generateStaticParams() {
@@ -106,6 +107,7 @@ export default async function LocaleLayout({
                 locale={current}
                 labels={{ login: dictionary.nav.login, logout: dictionary.nav.logout }}
               />
+              <CartBadge locale={current} label={dictionary.nav.cart} />
               <div className="locale-switch">
                 <Link href="/en" aria-label="English">
                   en

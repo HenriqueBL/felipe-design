@@ -150,29 +150,73 @@ export default async function CustomerOrderPage({
 
       <section className="summary-panel">
         <h2>{dictionary.checkout.summaryTitle}</h2>
+
+        {detail.items.length > 0 ? (
+          <>
+            <ul className="admin-order-items" data-testid="order-items-list">
+              {detail.items.map((item) => (
+                <li key={item.id} className="admin-order-item" data-testid={"order-item-" + item.item_index}>
+                  <p>
+                    <strong>{dictionary.dashboard.itemLabel(item.item_index)}</strong> —{" "}
+                    {item.angles} {dictionary.services.anglesLabel},{" "}
+                    {item.knife_quantity} {item.knife_quantity === 1 ? dictionary.dashboard.knifeSingular : dictionary.dashboard.knifePlural}
+                  </p>
+                  <p>
+                    {dictionary.dashboard.itemUnitPrice}:{" "}
+                    {formatMoney(item.unit_price_cents, order.currency, intlLocale)} ·{" "}
+                    {dictionary.dashboard.itemSubtotal}:{" "}
+                    {formatMoney(item.subtotal_cents, order.currency, intlLocale)}
+                  </p>
+                  <p>
+                    {dictionary.dashboard.itemImages}: {item.total_images} ·{" "}
+                    {dictionary.dashboard.itemKnifeRange}: {item.knife_index_start}–{item.knife_index_start + item.knife_quantity - 1}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <div className="summary-rows">
+              <div className="row">
+                <span>{dictionary.checkout.knivesLabel}</span>
+                <span>{order.knife_quantity}</span>
+              </div>
+              <div className="row">
+                <span>{dictionary.checkout.imagesLabel}</span>
+                <span>{order.total_images}</span>
+              </div>
+              <div className="row total">
+                <span>{dictionary.checkout.total}</span>
+                <span>{formatMoney(order.total_cents, order.currency, intlLocale)}</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="summary-rows">
+            <div className="row">
+              <span>{dictionary.checkout.planLabel}</span>
+              <span>
+                {planAngles ?? "-"} {dictionary.services.anglesLabel}
+              </span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.knivesLabel}</span>
+              <span>{order.knife_quantity}</span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.imagesLabel}</span>
+              <span>{order.total_images}</span>
+            </div>
+            <div className="row">
+              <span>{dictionary.checkout.unitPrice}</span>
+              <span>{formatMoney(order.unit_price_cents, order.currency, intlLocale)}</span>
+            </div>
+            <div className="row total">
+              <span>{dictionary.checkout.total}</span>
+              <span>{formatMoney(order.total_cents, order.currency, intlLocale)}</span>
+            </div>
+          </div>
+        )}
+
         <div className="summary-rows">
-          <div className="row">
-            <span>{dictionary.checkout.planLabel}</span>
-            <span>
-              {planAngles ?? "-"} {dictionary.services.anglesLabel}
-            </span>
-          </div>
-          <div className="row">
-            <span>{dictionary.checkout.knivesLabel}</span>
-            <span>{order.knife_quantity}</span>
-          </div>
-          <div className="row">
-            <span>{dictionary.checkout.imagesLabel}</span>
-            <span>{order.total_images}</span>
-          </div>
-          <div className="row">
-            <span>{dictionary.checkout.unitPrice}</span>
-            <span>{formatMoney(order.unit_price_cents, order.currency, intlLocale)}</span>
-          </div>
-          <div className="row total">
-            <span>{dictionary.checkout.total}</span>
-            <span>{formatMoney(order.total_cents, order.currency, intlLocale)}</span>
-          </div>
           <div className="row">
             <span>{dictionary.order.deadlineLabel}</span>
             <span>
@@ -252,6 +296,12 @@ export default async function CustomerOrderPage({
             maxPerKnife={order.max_source_photos_per_knife}
             maxPhotoSizeMb={order.max_source_photo_size_mb}
             images={sourcePhotoItems}
+            items={detail.items.map((item) => ({
+              itemIndex: item.item_index,
+              angles: item.angles,
+              knifeIndexStart: item.knife_index_start,
+              knifeQuantity: item.knife_quantity,
+            }))}
           />
         </section>
       ) : null}

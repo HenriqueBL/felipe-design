@@ -1,15 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
-import { buildCheckoutPath, type CheckoutParams } from "@/domain/checkout";
+
+import { addToCart } from "@/lib/cart-store";
 import type { Locale } from "@/lib/i18n/config";
+import { cartPath } from "@/lib/paths";
 import type { Currency } from "@/types/database";
 
 interface PlanSelectorLabels {
   quantityLabel: string;
-  choose: string;
+  addToCart: string;
+  addedToCart: string;
+  viewCart: string;
   unavailable: string;
+  maxKnivesError: string;
 }
 
 interface PlanSelectorProps {
@@ -20,30 +25,6 @@ interface PlanSelectorProps {
   labels: PlanSelectorLabels;
 }
 
-function uuidV4(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  const bytes = new Uint8Array(16);
-  for (let i = 0; i < 16; i += 1) {
-    bytes[i] = Math.floor(Math.random() * 256);
-  }
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return (
-    hex.slice(0, 8) +
-    "-" +
-    hex.slice(8, 12) +
-    "-" +
-    hex.slice(12, 16) +
-    "-" +
-    hex.slice(16, 20) +
-    "-" +
-    hex.slice(20)
-  );
-}
-
 export default function PlanSelector({
   locale,
   planId,
@@ -51,8 +32,9 @@ export default function PlanSelector({
   priceAvailable,
   labels,
 }: PlanSelectorProps) {
-  const router = useRouter();
   const [quantity, setQuantity] = useState(1);
+  const [added, setAdded] = useState(false);
+  const [limitError, setLimitError] = useState(false);
 
   function handleQuantity(value: string) {
     const parsed = Number(value);
@@ -61,9 +43,17 @@ export default function PlanSelector({
     }
   }
 
-  function handleChoose() {
-    const params: CheckoutParams = { planId, quantity, currency, idempotencyKey: uuidV4() };
-    router.push(buildCheckoutPath(locale, params));
+  // O carrinho guarda apenas intenção (planId/quantity/currency); o servidor
+  // revalida planos e precos no checkout. Nenhum preco vem do browser.
+  function handleAddToCart() {
+    const result = addToCart(planId, quantity, currency);
+    if (result.error === "MAX_TOTAL_KNIVES") {
+      setAdded(false);
+      setLimitError(true);
+      return;
+    }
+    setAdded(true);
+    setLimitError(false);
   }
 
   return (
@@ -81,12 +71,22 @@ export default function PlanSelector({
         <button
           type="button"
           className="btn btn-primary"
-          onClick={handleChoose}
+          onClick={handleAddToCart}
           disabled={!priceAvailable}
         >
-          {priceAvailable ? labels.choose : labels.unavailable}
+          {priceAvailable ? labels.addToCart : labels.unavailable}
         </button>
       </div>
+      {added ? (
+        <p className="plan-added-note">
+          {labels.addedToCart} <Link href={cartPath(locale)}>{labels.viewCart}</Link>
+        </p>
+      ) : null}
+      {limitError ? (
+        <p className="plan-limit-error" role="alert">
+          {labels.maxKnivesError}
+        </p>
+      ) : null}
     </div>
   );
 }

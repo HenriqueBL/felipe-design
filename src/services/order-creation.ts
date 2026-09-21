@@ -14,10 +14,54 @@ export class OrderCreationError extends Error {
 const KNOWN_ERROR_CODES = [
   "NOT_AUTHENTICATED",
   "INVALID_QUANTITY",
+  "INVALID_ITEMS",
   "PLAN_NOT_FOUND",
   "PRICE_NOT_FOUND",
   "IDEMPOTENCY_CONFLICT",
 ] as const;
+
+export interface CartOrderItem {
+  planId: string;
+  quantity: number;
+}
+
+export interface CreateCartOrderInput {
+  items: CartOrderItem[];
+  currency: Currency;
+  affiliateCode?: string | null;
+  idempotencyKey?: string | null;
+}
+
+// Multi-item: mesma autoridade server-side — o RPC valida planos, snapshot
+// precos, totais e total_images atomicamente; o browser envia apenas intenção.
+export async function createCartOrder(input: CreateCartOrderInput): Promise<OrderRow> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("create_cart_order", {
+    p_items: input.items.map((item) => ({
+      plan_id: item.planId,
+      quantity: item.quantity,
+    })),
+    p_currency: input.currency,
+    p_affiliate_code: input.affiliateCode ?? undefined,
+    p_idempotency_key: input.idempotencyKey ?? undefined,
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    for (const code of KNOWN_ERROR_CODES) {
+      if (message.includes(code)) {
+        throw new OrderCreationError(code);
+      }
+    }
+    throw new OrderCreationError("UNKNOWN");
+  }
+
+  if (!data) {
+    throw new OrderCreationError("UNKNOWN");
+  }
+
+  return data;
+}
 
 export interface CreateOrderInput {
   planId: string;
