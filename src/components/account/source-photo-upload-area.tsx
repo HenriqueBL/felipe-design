@@ -458,7 +458,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
           (_, i) => group.knifeIndexStart + i,
         );
         return (
-          <div key={"item-" + group.itemIndex} className="source-photo-item-group">
+          <div key={"item-" + group.itemIndex} className="source-photo-item-group" data-testid={`source-item-${group.itemIndex}`}>
             {group.itemIndex > 0 ? (
               <h3 className="source-photo-item-heading">
                 {labels.itemLabel(group.itemIndex)} —{" "}
@@ -479,7 +479,7 @@ export default function SourcePhotoUploadArea(props: SourcePhotoUploadAreaProps)
                   !(j.state === "completed" && j.persistedImageId),
               );
               return (
-                <div key={knifeIndex} className="source-photo-knife">
+                <div key={knifeIndex} className="source-photo-knife" data-testid={`source-knife-${knifeIndex}`}>
                   <h4>
                     {labels.knifeLabel(knifeIndex)} — {labels.countLabel(count, maxPerKnife)}
                   </h4>

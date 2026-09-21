@@ -78,7 +78,7 @@ Buckets: `client-uploads` e `order-results` **privados**; `portfolio` público. 
 
 ### Aggregate knife limit guard (migration 0019)
 
-- `create_cart_order` agora valida `v_total_knives <= 100` antes de qualquer escrita, levantando `INVALID_ITEMS` se o total agregado exceder o limite. Isso alinha o RPC com a constante `CART_MAX_TOTAL_KNIVES = 100` em `src/domain/cart.ts` e evita erros genéricos de CHECK constraint no banco. O frontend (`normalizeCart`) aplica o mesmo limite proporcionalmente ao adicionar/atualizar itens.
+- `create_cart_order` agora valida `v_total_knives <= 100` antes de qualquer escrita, levantando `INVALID_ITEMS` se o total agregado exceder o limite. Isso alinha o RPC com a constante `CART_MAX_TOTAL_KNIVES = 100` em `src/domain/cart.ts` e evita erros genéricos de CHECK constraint no banco. O frontend (`addToCart`/`updateQuantity` em `cart-store.ts`) rejeita deterministicamente operações que excederiam o limite, preservando itens existentes sem mutação silenciosa; `normalizeCart` é puramente estrutural (deduplicação e cap por item).
 
 ## Segurança adicional
 

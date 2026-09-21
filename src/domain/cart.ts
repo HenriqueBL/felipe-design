@@ -45,39 +45,24 @@ export function normalizeCart(raw: unknown): Cart | null {
     );
   }
 
-  let rawItems = [...quantities.entries()]
+  const items = [...quantities.entries()]
     .map(([planId, quantity]) => ({ planId, quantity }))
     .slice(0, CART_MAX_ITEMS);
 
-  // Enforce aggregate knife limit across all items. If total exceeds the cap,
-  // proportionally reduce quantities (largest-first) to stay within budget.
-  let totalKnives = rawItems.reduce((sum, item) => sum + item.quantity, 0);
-  while (totalKnives > CART_MAX_TOTAL_KNIVES && rawItems.length > 0) {
-    // Find item with largest quantity to reduce
-    let maxIdx = 0;
-    for (let i = 1; i < rawItems.length; i++) {
-      if (rawItems[i]!.quantity > rawItems[maxIdx]!.quantity) {
-        maxIdx = i;
-      }
-    }
-    const excess = totalKnives - CART_MAX_TOTAL_KNIVES;
-    const reduction = Math.min(excess, rawItems[maxIdx]!.quantity - 1);
-    if (reduction <= 0) {
-      // Can't reduce further without removing item; remove smallest instead
-      rawItems = rawItems.filter((_, i) => i !== maxIdx);
-    } else {
-      rawItems[maxIdx] = {
-        ...rawItems[maxIdx]!,
-        quantity: rawItems[maxIdx]!.quantity - reduction,
-      };
-    }
-    totalKnives = rawItems.reduce((sum, item) => sum + item.quantity, 0);
-  }
+  // normalizeCart is a PURE structural normalizer: it deduplicates and caps
+  // per-item quantity only. Aggregate knife limit enforcement belongs in
+  // addToCart/updateQuantity so that exceeding the cap rejects the operation
+  // deterministically instead of silently mutating unrelated items.
 
-  if (rawItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
-  return { currency: parsed.data.currency, items: rawItems };
+  return { currency: parsed.data.currency, items };
+}
+
+/** Pure helper: compute total knives for a set of cart items. */
+export function cartTotalKnives(items: ReadonlyArray<{ quantity: number }>): number {
+  return items.reduce((sum, item) => sum + item.quantity, 0);
 }
 
 export function cartOutputImages(

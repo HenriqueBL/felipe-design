@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  CART_MAX_TOTAL_KNIVES,
   CART_STORAGE_KEY,
   type Cart,
   type CartItem,
+  cartTotalKnives,
   normalizeCart,
 } from "@/domain/cart";
 import type { Currency } from "@/types/database";
@@ -39,11 +41,28 @@ function writeCart(cart: Cart | null): void {
 
 // O carrinho guarda apenas intenção (planId, quantity, currency). Preços e
 // totais são sempre revalidados no servidor; nada salvo aqui é autoridade.
+// Aggregate knife limit is enforced HERE (not in normalizeCart) so that
+// exceeding the cap rejects the operation deterministically instead of
+// silently mutating unrelated items.
 export function addToCart(planId: string, quantity: number, currency: Currency): Cart | null {
   const current = readCart() ?? { currency, items: [] };
-  const cart: Cart = current.currency === currency
-    ? { currency, items: [...current.items, { planId, quantity }] }
-    : { currency, items: [{ planId, quantity }] };
+  const baseItems = current.currency === currency ? current.items : [];
+  // Merge with existing same-plan entry first (normalizeCart deduplicates later,
+  // but we need accurate total for the guard before writing anything).
+  const merged = new Map<string, number>();
+  for (const item of baseItems) {
+    merged.set(item.planId, item.quantity);
+  }
+  merged.set(planId, (merged.get(planId) ?? 0) + quantity);
+  const candidateItems = [...merged.entries()].map(([pid, qty]) => ({
+    planId: pid,
+    quantity: qty,
+  }));
+  if (cartTotalKnives(candidateItems) > CART_MAX_TOTAL_KNIVES) {
+    // Reject: do NOT mutate cart, do NOT redistribute other items.
+    return current.items.length > 0 ? current : null;
+  }
+  const cart: Cart = { currency, items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
   return normalized;
@@ -54,12 +73,14 @@ export function updateQuantity(planId: string, quantity: number): Cart | null {
   if (!current) {
     return null;
   }
-  const cart: Cart = {
-    currency: current.currency,
-    items: current.items.map((item) =>
-      item.planId === planId ? { planId, quantity } : item,
-    ),
-  };
+  const candidateItems = current.items.map((item) =>
+    item.planId === planId ? { planId, quantity } : item,
+  );
+  if (cartTotalKnives(candidateItems) > CART_MAX_TOTAL_KNIVES) {
+    // Reject: preserve previous state exactly.
+    return current;
+  }
+  const cart: Cart = { currency: current.currency, items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
   return normalized;

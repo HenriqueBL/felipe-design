@@ -9,7 +9,7 @@ import type { Cart } from "@/domain/cart";
 import { clearCart, readCart, subscribeToCart } from "@/lib/cart-store";
 import type { Locale } from "@/lib/i18n/config";
 import { cartPath, servicesPath } from "@/lib/paths";
-import type { Currency } from "@/types/database";
+import type { Currency, EstimateDeliveryResult } from "@/types/database";
 
 import CreateCartOrderForm from "./create-cart-order-form";
 
@@ -23,12 +23,7 @@ export interface CartPricingItem {
 export interface CartPricingResponse {
   items: Map<string, CartPricingItem>;
   totalImages: number;
-  estimate: {
-    estimated_turnaround_days: number;
-    business_days_after_ready: number;
-    backlog_note: string | null;
-    deadline_note: string | null;
-  } | null;
+  estimate: EstimateDeliveryResult | null;
 }
 
 interface CartCheckoutLabels {
@@ -239,17 +234,13 @@ export default function CartCheckoutView({
             <div className="estimate-panel">
               <p>
                 <strong>{labels.estimatedTurnaround}:</strong>{" "}
-                {estimate.estimated_turnaround_days}{" "}
-                {estimate.estimated_turnaround_days === 1
+                {estimate.businessDaysAfterReady}{" "}
+                {estimate.businessDaysAfterReady === 1
                   ? labels.businessDaysAfterReady.replace(/s$/, "")
                   : labels.businessDaysAfterReady}
               </p>
-              {estimate.backlog_note ? (
-                <p className="note">{estimate.backlog_note}</p>
-              ) : null}
-              {estimate.deadline_note ? (
-                <p className="note">{estimate.deadline_note}</p>
-              ) : null}
+              <p className="deadline-meta">{labels.backlogNote}</p>
+              <p className="note">{labels.deadlineNote}</p>
             </div>
           ) : totalImages > 0 ? (
             <p className="form-status note">{labels.estimateUnavailable}</p>
