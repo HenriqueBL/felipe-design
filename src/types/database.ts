@@ -214,9 +214,11 @@ export type PortfolioItemRow = {
   id: string;
   title: string;
   description: string | null;
-  before_storage_path: string;
-  after_storage_path: string;
+  before_storage_path: string | null;
+  after_storage_path: string | null;
+  image_storage_path: string | null;
   published: boolean;
+  featured: boolean;
   sort_order: number;
   created_at: string;
 };
@@ -224,17 +226,21 @@ export type PortfolioItemInsert = {
   id?: string;
   title: string;
   description?: string | null;
-  before_storage_path: string;
-  after_storage_path: string;
+  before_storage_path?: string | null;
+  after_storage_path?: string | null;
+  image_storage_path?: string | null;
   published?: boolean;
+  featured?: boolean;
   sort_order?: number;
 };
 export type PortfolioItemUpdate = {
   title?: string;
   description?: string | null;
-  before_storage_path?: string;
-  after_storage_path?: string;
+  before_storage_path?: string | null;
+  after_storage_path?: string | null;
+  image_storage_path?: string | null;
   published?: boolean;
+  featured?: boolean;
   sort_order?: number;
 };
 
@@ -464,6 +470,10 @@ export type Database = {
       set_plan_active: {
         Args: { p_plan_id: string; p_active: boolean };
         Returns: PlanRow;
+      };
+      set_portfolio_featured: {
+        Args: { target_id: string };
+        Returns: undefined;
       };
       update_app_settings: {
         Args: {

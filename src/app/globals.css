@@ -176,6 +176,83 @@ a:hover {
   flex-wrap: wrap;
 }
 
+/* Hero com foto destaque do portfolio: banner responsivo com overlay
+   apenas para legibilidade do texto sobreposto. */
+.hero-featured {
+  position: relative;
+  padding: 160px 0 128px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero-featured .hero-media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.hero-featured .hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(15, 17, 21, 0.88) 0%, rgba(15, 17, 21, 0.55) 55%, rgba(15, 17, 21, 0.25) 100%),
+    linear-gradient(0deg, rgba(15, 17, 21, 0.35) 0%, transparent 40%);
+}
+
+.hero-featured h1,
+.hero-featured p {
+  color: var(--text-strong, #f4f2ee);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 720px) {
+  .hero-featured {
+    padding: 96px 0 72px;
+  }
+
+  .hero-featured .hero-overlay {
+    background: linear-gradient(0deg, rgba(15, 17, 21, 0.85) 0%, rgba(15, 17, 21, 0.55) 100%);
+  }
+}
+
+/* Admin de portfolio: thumb + acoes por item. */
+.portfolio-thumb {
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border);
+}
+
+.portfolio-item h2 {
+  font-size: 1.2rem;
+  margin: 0 0 4px;
+}
+
+.portfolio-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.portfolio-actions form {
+  display: inline;
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-danger {
+  border-color: #b3362c;
+  color: #b3362c;
+}
+
 .btn {
   display: inline-block;
   padding: 12px 26px;
@@ -1316,6 +1393,18 @@ textarea {
 
 .footer-bottom p {
   margin: 0;
+}
+
+/* Credito discreto do desenvolvedor, alinhado ao copyright. */
+.footer-credit {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.footer-credit a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .page-hero {

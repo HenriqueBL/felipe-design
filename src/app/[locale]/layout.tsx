@@ -159,6 +159,16 @@ export default async function LocaleLayout({
           </div>
           <div className="container footer-bottom">
             <p>{dictionary.footer.copyright(year)}</p>
+            <p className="footer-credit">
+              {dictionary.footer.developerCredit}{" "}
+              <a
+                href="https://www.linkedin.com/in/henriquebdl/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {dictionary.footer.developerName}
+              </a>
+            </p>
           </div>
         </footer>
       </body>

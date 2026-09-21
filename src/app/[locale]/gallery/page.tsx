@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GALLERY_ITEMS } from "@/lib/gallery";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
 import { galleryPath, servicesPath } from "@/lib/paths";
 import { siteUrl } from "@/lib/site";
+import { listPublishedPortfolioItems, portfolioPublicUrl } from "@/services/portfolio";
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -56,6 +56,30 @@ export default async function GalleryPage({
   const locale: Locale = isLocale(raw) ? raw : defaultLocale;
   const dictionary = await getDictionary(locale);
 
+  // Fonte única: portfolio publicado no banco. Se zero itens ou falha,
+  // mostra empty state localizado (sem 500, sem fallback estático).
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  let items: Array<{
+    key: string;
+    src: string | null;
+    title: string;
+    description: string | null;
+  }> = [];
+  try {
+    const published = await listPublishedPortfolioItems();
+    items = published.map((item) => ({
+      key: item.id,
+      src:
+        item.resolvedMediaPath && supabaseUrl
+          ? portfolioPublicUrl(supabaseUrl, item.resolvedMediaPath)
+          : null,
+      title: item.title,
+      description: item.description,
+    }));
+  } catch {
+    items = [];
+  }
+
   return (
     <main>
       <section className="page-hero">
@@ -66,7 +90,7 @@ export default async function GalleryPage({
       </section>
       <section className="section">
         <div className="container">
-          {GALLERY_ITEMS.length === 0 ? (
+          {items.length === 0 ? (
             <div className="state-note">
               <h2>{dictionary.gallery.emptyTitle}</h2>
               <p>{dictionary.gallery.emptyBody}</p>
@@ -76,20 +100,26 @@ export default async function GalleryPage({
             </div>
           ) : (
             <div className="gallery-grid">
-              {GALLERY_ITEMS.map((item) => (
-                <figure key={item.src} className="gallery-item">
-                  <Image
-                    src={item.src}
-                    alt={item.alt[locale]}
-                    width={item.width}
-                    height={item.height}
-                    sizes="(max-width: 720px) 100vw, (max-width: 1080px) 50vw, 33vw"
-                  />
-                  {item.caption ? (
-                    <figcaption>{item.caption[locale]}</figcaption>
-                  ) : null}
-                </figure>
-              ))}
+              {items.map((item) =>
+                item.src ? (
+                  <figure key={item.key} className="gallery-item">
+                    <Image
+                      src={item.src}
+                      alt={item.title}
+                      width={800}
+                      height={600}
+                      sizes="(max-width: 720px) 100vw, (max-width: 1080px) 50vw, 33vw"
+                    />
+                    {item.description ? (
+                      <figcaption>
+                        <strong>{item.title}</strong> — {item.description}
+                      </figcaption>
+                    ) : item.title ? (
+                      <figcaption>{item.title}</figcaption>
+                    ) : null}
+                  </figure>
+                ) : null,
+              )}
             </div>
           )}
         </div>

@@ -1,8 +1,16 @@
+import Image from "next/image";
 import Link from "next/link";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { servicesPath } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
+import {
+  getFeaturedPortfolioItem,
+  portfolioPublicUrl,
+} from "@/services/portfolio";
+
+// Fallback versionado do hero: a Home nunca quebra por falta de destaque.
+const HERO_FALLBACK_SRC = "/home/hero-fallback.svg";
 
 export default async function HomePage({
   params,
@@ -12,6 +20,16 @@ export default async function HomePage({
   const { locale } = await params;
   const current: Locale = isLocale(locale) ? locale : defaultLocale;
   const dictionary = await getDictionary(current);
+
+  const featured = await getFeaturedPortfolioItem();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  // Usa resolvedMediaPath (image → after → before) para suportar itens
+  // novos e legacy sem duplicar paths artificialmente.
+  const heroSrc =
+    featured && featured.resolvedMediaPath && supabaseUrl
+      ? portfolioPublicUrl(supabaseUrl, featured.resolvedMediaPath)
+      : HERO_FALLBACK_SRC;
+  const heroAlt = featured ? featured.title : dictionary.home.heroTitle;
 
   const websiteSchema = {
     "@context": "https://schema.org",
@@ -28,8 +46,18 @@ export default async function HomePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <section className="hero">
-        <div className="container">
+      <section className="hero hero-featured">
+        <Image
+          src={heroSrc}
+          alt={heroAlt}
+          fill
+          priority
+          sizes="100vw"
+          className="hero-media"
+          style={{ objectFit: "cover", objectPosition: "center" }}
+        />
+        <div className="hero-overlay" aria-hidden="true" />
+        <div className="container hero-content">
           <h1>{dictionary.home.heroTitle}</h1>
           <p>{dictionary.home.heroSubtitle}</p>
           <div className="hero-actions">

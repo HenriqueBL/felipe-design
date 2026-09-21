@@ -29,6 +29,7 @@ export default async function DashboardLayout({
         <Link href={"/" + current + "/dashboard"}>{dictionary.dashboard.overview}</Link>
         <Link href={"/" + current + "/dashboard/orders"}>{dictionary.dashboard.orders}</Link>
         <Link href={"/" + current + "/dashboard/plans"}>{dictionary.dashboard.plans}</Link>
+        <Link href={"/" + current + "/dashboard/portfolio"}>{dictionary.dashboard.portfolio}</Link>
         <Link href={"/" + current + "/dashboard/settings"}>{dictionary.dashboard.settings}</Link>
         <Link href={"/" + current}>{dictionary.dashboard.backToSite}</Link>
       </aside>
