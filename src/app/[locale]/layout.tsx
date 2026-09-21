@@ -16,6 +16,7 @@ import {
 import { publicPath, siteUrl } from "@/lib/site";
 import AuthNav from "@/components/auth-nav";
 import CartBadge from "@/components/cart/cart-badge";
+import HeaderScrollState from "@/components/header-scroll-state";
 import MobileNav from "@/components/mobile-nav";
 import "../globals.css";
 
@@ -100,11 +101,7 @@ export default async function LocaleLayout({
         <a className="skip-link" href="#main-content">
           {dictionary.common.skipToContent}
         </a>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){var h=document.querySelector('.site-header');if(!h)return;var t=60;function u(){h.classList.toggle('scrolled',window.scrollY>t)}u();window.addEventListener('scroll',u,{passive:true})})();`,
-          }}
-        />
+        <HeaderScrollState />
         <header className="site-header">
           <div className="container">
             <Link href={homePath(current)} className="brand">
@@ -128,14 +125,6 @@ export default async function LocaleLayout({
                 labels={{ login: dictionary.nav.login, logout: dictionary.nav.logout }}
               />
               <CartBadge locale={current} label={dictionary.nav.cart} />
-              <div className="locale-switch">
-                <Link href="/en" aria-label="English">
-                  en
-                </Link>
-                <Link href="/pt" aria-label="Português">
-                  pt
-                </Link>
-              </div>
             </nav>
             <MobileNav
               locale={current}
@@ -148,6 +137,9 @@ export default async function LocaleLayout({
                 login: dictionary.nav.login,
                 logout: dictionary.nav.logout,
                 cart: dictionary.nav.cart,
+                openMenu: dictionary.mobileNav.openMenu,
+                closeMenu: dictionary.mobileNav.closeMenu,
+                navigationMenu: dictionary.mobileNav.navigationMenu,
               }}
             />
           </div>
@@ -178,18 +170,7 @@ export default async function LocaleLayout({
               <Link href={galleryPath(current)}>{dictionary.nav.gallery}</Link>
               <Link href={accountPath(current)}>{dictionary.nav.account}</Link>
             </nav>
-            <div className="footer-locale">
-              <h3>{dictionary.footer.language}</h3>
-              <div className="locale-switch">
-                <Link href="/en" aria-label="English">
-                  English
-                </Link>
-                <Link href="/pt" aria-label="Português">
-                  Português
-                </Link>
-              </div>
-            </div>
-          </div>
+                      </div>
           <div className="container footer-bottom">
             <p>{dictionary.footer.copyright(year)}</p>
             <p className="footer-credit">

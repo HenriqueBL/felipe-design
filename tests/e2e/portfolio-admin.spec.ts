@@ -85,7 +85,8 @@ test.describe("Portfolio Admin E2E", () => {
     // Submit — server action should accept the file
     // Full CRUD flow is proven by integration tests (130/130 pass with real JWT RLS).
     // E2E DOM assertions after submit are blocked by useActionState/303 reset behavior.
-    await page.click('button[type="submit"]');
+    // Scope to the portfolio create form's primary button to avoid matching other submit buttons.
+    await page.locator(".panel form button.btn-primary").first().click();
 
     // Wait for navigation/reload to complete (proves server accepted the request)
     await page.waitForLoadState("networkidle", { timeout: 15_000 });

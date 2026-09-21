@@ -1,12 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { defaultLocale, isLocale } from "@/lib/i18n/config";
+import { isLocale } from "@/lib/i18n/config";
+import { detectPreferredLocale } from "@/lib/i18n/detect-locale";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/") {
-    return NextResponse.redirect(new URL(`/${defaultLocale}`, request.url));
+    const locale = detectPreferredLocale({
+      acceptLanguage: request.headers.get("accept-language"),
+      country:
+        request.headers.get("cf-ipcountry") ??
+        request.headers.get("x-vercel-ip-country"),
+    });
+    return NextResponse.redirect(new URL(`/${locale}`, request.url));
   }
 
   const { response, supabase, user } = await updateSession(request);

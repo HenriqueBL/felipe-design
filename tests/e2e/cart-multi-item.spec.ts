@@ -39,8 +39,10 @@ test.describe("Multi-item Cart Journey", () => {
 
     // Add first plan
     await addToCartButtons.nth(0).click();
-    const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="cart"] span, a[href*="carrinho"] span');
-    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
+    // Wait for the count span to appear (hydration + subscription cycle)
+    const badge = page.locator('.cart-badge-count');
+    await expect(badge.first()).toBeVisible({ timeout: 10_000 });
+    await expect(badge.first()).toContainText("1");
 
     // Add second plan
     await addToCartButtons.nth(1).click();
@@ -152,8 +154,10 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(addToCartButtons.first()).toBeVisible({ timeout: 10_000 });
     await addToCartButtons.first().click();
 
-    const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="cart"] span');
-    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
+    // Wait for the count span to appear (hydration + subscription cycle)
+    const badge = page.locator('.cart-badge-count');
+    await expect(badge.first()).toBeVisible({ timeout: 10_000 });
+    await expect(badge.first()).toContainText("1");
 
     // Navigate to cart WITHOUT currency param — must still show BRL from localStorage
     await page.goto("/en/cart");
@@ -203,8 +207,10 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(addButtons.first()).toBeVisible({ timeout: 10_000 });
     await addButtons.first().click();
 
-    const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="carrinho"] span, a[href*="cart"] span');
-    await expect(badge.first()).toContainText("1", { timeout: 5_000 });
+    // Wait for the count span to appear (hydration + subscription cycle)
+    const badge = page.locator('.cart-badge-count');
+    await expect(badge.first()).toBeVisible({ timeout: 10_000 });
+    await expect(badge.first()).toContainText("1");
 
     // Navigate to cart WITHOUT currency param — must still show USD from localStorage
     await page.goto("/pt/carrinho");

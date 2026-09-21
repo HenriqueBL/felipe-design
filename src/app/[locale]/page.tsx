@@ -9,7 +9,8 @@ import {
   listPublishedPortfolioItems,
   portfolioPublicUrl,
 } from "@/services/portfolio";
-import { listPlans, type PlanWithPrices } from "@/services/plans";
+import { listActivePlans, type ActivePlan } from "@/services/plans";
+import { formatMoney } from "@/lib/format";
 
 // Fallback versionado do hero: a Home nunca quebra por falta de destaque.
 const HERO_FALLBACK_SRC = "/home/hero-fallback.svg";
@@ -37,9 +38,16 @@ export default async function HomePage({
   const publishedItems = await listPublishedPortfolioItems();
   const selectedWork = publishedItems.slice(0, 6);
 
-  // Fetch plans for Services preview
-  const plans = await listPlans();
+  // Fetch active plans for Services preview (safe fallback: never 500)
+  let plans: ActivePlan[] = [];
+  try {
+    plans = await listActivePlans();
+  } catch {
+    // Supabase unavailable: omit preview section gracefully
+    plans = [];
+  }
   const currency = current === "pt" ? "BRL" : "USD";
+  const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   const websiteSchema = {
     "@context": "https://schema.org",
@@ -74,7 +82,7 @@ export default async function HomePage({
         </div>
         <div className="container cinematic-hero-content">
           <p className="cinematic-eyebrow">
-            {current === "pt" ? "FOTOGRAFIA DE FACAS, REFINADA." : "KNIFE PHOTOGRAPHY, REFINED."}
+            {dictionary.home.heroEyebrow}
           </p>
           <h1>{dictionary.home.heroTitle}</h1>
           <p className="cinematic-hero-subtitle">{dictionary.home.heroSubtitle}</p>
@@ -94,7 +102,7 @@ export default async function HomePage({
         <section className="section cinematic-featured-work">
           <div className="container">
             <p className="section-eyebrow">
-              {current === "pt" ? "Trabalho em Destaque" : "Featured Work"}
+              {dictionary.home.featuredWorkEyebrow}
             </p>
             <div className="cinematic-featured-grid">
               <div className="cinematic-featured-image">
@@ -113,7 +121,7 @@ export default async function HomePage({
                 <h2>{featured.title}</h2>
                 {featured.description && <p>{featured.description}</p>}
                 <Link href={galleryPath(current)} className="btn btn-secondary">
-                  {current === "pt" ? "Ver Galeria Completa" : "View Full Gallery"}
+                  {dictionary.home.featuredWorkCta}
                 </Link>
               </div>
             </div>
@@ -125,40 +133,24 @@ export default async function HomePage({
       <section className="section cinematic-process">
         <div className="container">
           <p className="section-eyebrow">
-            {current === "pt" ? "O Processo" : "The Process"}
+            {dictionary.home.processEyebrow}
           </p>
-          <h2>
-            {current === "pt"
-              ? "Da Imagem Bruta à Obra-Prima"
-              : "From Raw Image to Masterpiece"}
-          </h2>
+          <h2>{dictionary.home.processTitle}</h2>
           <div className="cinematic-process-steps">
             <div className="cinematic-step">
               <span className="cinematic-step-number">01</span>
-              <h3>{current === "pt" ? "Fotografia" : "Photography"}</h3>
-              <p>
-                {current === "pt"
-                  ? "Captura profissional com iluminação controlada e composição precisa."
-                  : "Professional capture with controlled lighting and precise composition."}
-              </p>
+              <h3>{dictionary.home.processStep1Title}</h3>
+              <p>{dictionary.home.processStep1Desc}</p>
             </div>
             <div className="cinematic-step">
               <span className="cinematic-step-number">02</span>
-              <h3>{current === "pt" ? "Retoque" : "Retouching"}</h3>
-              <p>
-                {current === "pt"
-                  ? "Edição meticulosa de cor, contraste e detalhes para realçar cada lâmina."
-                  : "Meticulous color, contrast and detail editing to enhance every blade."}
-              </p>
+              <h3>{dictionary.home.processStep2Title}</h3>
+              <p>{dictionary.home.processStep2Desc}</p>
             </div>
             <div className="cinematic-step">
               <span className="cinematic-step-number">03</span>
-              <h3>{current === "pt" ? "Entrega" : "Delivery"}</h3>
-              <p>
-                {current === "pt"
-                  ? "Arquivos em alta resolução prontos para catálogo, redes sociais ou impressão."
-                  : "High-resolution files ready for catalog, social media or print."}
-              </p>
+              <h3>{dictionary.home.processStep3Title}</h3>
+              <p>{dictionary.home.processStep3Desc}</p>
             </div>
           </div>
         </div>
@@ -168,35 +160,27 @@ export default async function HomePage({
       <section className="section cinematic-services-preview">
         <div className="container">
           <p className="section-eyebrow">
-            {current === "pt" ? "Serviços" : "Services"}
+            {dictionary.home.servicesEyebrow}
           </p>
-          <h2>
-            {current === "pt"
-              ? "Escolha Seu Pacote"
-              : "Choose Your Package"}
-          </h2>
+          <h2>{dictionary.home.servicesTitle}</h2>
           <div className="cinematic-services-grid">
-            {plans.map((plan: PlanWithPrices, idx: number) => {
-              const price = plan.prices.find((p: { currency: string }) => p.currency === currency);
+            {plans.map((plan: ActivePlan, idx: number) => {
+              const priceCents = plan.prices[currency];
               return (
                 <div key={plan.id} className="cinematic-service-card">
                   <span className="cinematic-service-number">
                     {String(idx + 1).padStart(2, "0")}
                   </span>
                   <h3>
-                    {plan.angles} {plan.angles === 1 ? (current === "pt" ? "Ângulo" : "Angle") : (current === "pt" ? "Ângulos" : "Angles")}
+                    {plan.angles} {plan.angles === 1 ? dictionary.home.servicesAngleSingular : dictionary.home.servicesAnglePlural}
                   </h3>
-                  {price && (
+                  {priceCents !== null && (
                     <p className="cinematic-service-price">
-                      {currency === "BRL" ? "R$" : "$"}
-                      {" "}
-                      {(price.amount_cents / 100).toFixed(currency === "BRL" ? 2 : 0)}
+                      {formatMoney(priceCents, currency, intlLocale)}
                     </p>
                   )}
                   <p className="cinematic-service-desc">
-                    {current === "pt"
-                      ? `Pacote profissional de ${plan.angles} ângulo${plan.angles > 1 ? "s" : ""}.`
-                      : `Professional ${plan.angles}-angle package.`}
+                    {dictionary.home.servicesPackageDesc.replace("{count}", String(plan.angles))}
                   </p>
                 </div>
               );
@@ -204,7 +188,7 @@ export default async function HomePage({
           </div>
           <div className="cinematic-services-cta">
             <Link href={servicesPath(current)} className="btn btn-primary">
-              {current === "pt" ? "Ver Todos os Serviços" : "View All Services"}
+              {dictionary.home.servicesViewAll}
             </Link>
           </div>
         </div>
@@ -215,13 +199,9 @@ export default async function HomePage({
         <section className="section cinematic-selected-work">
           <div className="container">
             <p className="section-eyebrow">
-              {current === "pt" ? "Trabalhos Selecionados" : "Selected Work"}
+              {dictionary.home.selectedWorkEyebrow}
             </p>
-            <h2>
-              {current === "pt"
-                ? "Portfólio Recente"
-                : "Recent Portfolio"}
-            </h2>
+            <h2>{dictionary.home.selectedWorkTitle}</h2>
             <div className="cinematic-gallery-grid">
               {selectedWork.map((item) => (
                 <figure key={item.id} className="cinematic-gallery-item">
@@ -241,7 +221,7 @@ export default async function HomePage({
             </div>
             <div className="cinematic-gallery-cta">
               <Link href={galleryPath(current)} className="btn btn-secondary">
-                {current === "pt" ? "Ver Galeria Completa" : "View Full Gallery"}
+                {dictionary.home.selectedWorkCta}
               </Link>
             </div>
           </div>
@@ -253,20 +233,12 @@ export default async function HomePage({
         <div className="container">
           <div className="cinematic-about-content">
             <p className="section-eyebrow">
-              {current === "pt" ? "Sobre Felipe" : "About Felipe"}
+              {dictionary.home.aboutEyebrow}
             </p>
-            <h2>
-              {current === "pt"
-                ? "Mais de 5 Anos de Excelência Visual"
-                : "Over 5 Years of Visual Excellence"}
-            </h2>
-            <p>
-              {current === "pt"
-                ? "Especialista em fotografia e retoque de facas artesanais, com trabalhos publicados na BLADE Magazine e participação no Legacy of Steel II."
-                : "Specialist in handcrafted knife photography and retouching, with work published in BLADE Magazine and featured in Legacy of Steel II."}
-            </p>
+            <h2>{dictionary.home.aboutTitle}</h2>
+            <p>{dictionary.home.aboutDesc}</p>
             <Link href={aboutPath(current)} className="btn btn-ghost">
-              {current === "pt" ? "Saiba Mais" : "Learn More"}
+              {dictionary.home.aboutCta}
             </Link>
           </div>
         </div>
@@ -275,16 +247,8 @@ export default async function HomePage({
       {/* ─── FINAL CTA ──────────────────────────────────────────── */}
       <section className="section cinematic-final-cta">
         <div className="container">
-          <h2>
-            {current === "pt"
-              ? "Pronto para Elevar Suas Imagens?"
-              : "Ready to Elevate Your Images?"}
-          </h2>
-          <p>
-            {current === "pt"
-              ? "Transforme suas fotos de facas em peças de arte visual."
-              : "Transform your knife photos into visual art pieces."}
-          </p>
+          <h2>{dictionary.home.finalCtaTitle}</h2>
+          <p>{dictionary.home.finalCtaDesc}</p>
           <Link href={servicesPath(current)} className="btn btn-primary btn-lg">
             {dictionary.home.ctaPrimary}
           </Link>

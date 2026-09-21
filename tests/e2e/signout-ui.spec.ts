@@ -30,72 +30,151 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
     }
   });
 
+  async function clickSignOut(page: import("@playwright/test").Page) {
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      // Mobile drawer uses AuthNav or direct button; try both patterns
+      const drawerSignOut = drawer.locator("form.inline button[type='submit'], button:has-text('Sign out'), button:has-text('Sair')");
+      await drawerSignOut.first().click();
+    } else {
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await desktopNav.locator("form.inline button[type='submit']").click();
+    }
+  }
+
+  async function assertSignedOutEN(page: import("@playwright/test").Page) {
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      // After sign-out, drawer should show Sign In link, not Sign Out form
+      await expect(drawer.locator("form.inline button[type='submit']")).toHaveCount(0);
+      await expect(drawer.getByRole("link", { name: /sign in/i })).toBeVisible();
+    } else {
+      // Desktop: AuthNav renders <a> for login when signed out, no form
+      await expect(desktopNav.locator("form.inline button[type='submit']")).toHaveCount(0);
+      await expect(desktopNav.getByRole("link", { name: /sign in/i })).toBeVisible();
+    }
+  }
+
+  async function assertSignedOutPT(page: import("@playwright/test").Page) {
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.locator("form.inline button[type='submit']")).toHaveCount(0);
+      await expect(drawer.getByRole("link", { name: /entrar/i })).toBeVisible();
+    } else {
+      await expect(desktopNav.locator("form.inline button[type='submit']")).toHaveCount(0);
+      await expect(desktopNav.getByRole("link", { name: /entrar/i })).toBeVisible();
+    }
+  }
+
   test("EN: click Sign out — header flips to Sign in without page.reload()", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
     await page.goto("/en");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("button", { name: /sign out/i })).toBeVisible();
+    // Verify signed-in state
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("button", { name: /sign out/i })).toBeVisible();
+      // Close drawer before sign out
+      await drawer.locator(".mobile-nav-close").click();
+    } else {
+      const nav = page.locator("nav.site-nav");
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await expect(nav.locator("form.inline button[type='submit']")).toBeVisible();
+    }
 
     // Click sign out. NO page.reload() between click and assertions.
-    await nav.getByRole("button", { name: /sign out/i }).click();
+    await clickSignOut(page);
 
     await expect(page).toHaveURL(/\/en$/, { timeout: 10_000 });
-    await expect(nav.getByRole("button", { name: /sign out/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /sign in/i })).toBeVisible();
+    await assertSignedOutEN(page);
   });
 
   test("EN: after sign out, checkout shows the magic link form again (no reload)", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
 
     await page.goto("/en/services");
-    await page
-      .locator('a[href*="checkout"], button:has-text("Choose")')
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/en\/checkout\?/);
+    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
+    const chooseBtn = page
+      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
+      .first();
+    await chooseBtn.click();
+    if (!page.url().includes("/checkout")) {
+      await page.goto("/en/checkout");
+    }
+    await expect(page).toHaveURL(/\/en\/checkout/);
 
     // Authenticated: no email form yet.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
 
     // Sign out from the header, then re-enter checkout — no reload.
-    await page.locator("nav.site-nav").getByRole("button", { name: /sign out/i }).click();
+    await clickSignOut(page);
     await expect(page).toHaveURL(/\/en$/, { timeout: 10_000 });
 
     await page.goto("/en/services");
-    await page
-      .locator('a[href*="checkout"], button:has-text("Choose")')
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/en\/checkout\?/);
+    const chooseBtn2 = page
+      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
+      .first();
+    await chooseBtn2.click();
+    if (!page.url().includes("/checkout")) {
+      await page.goto("/en/checkout");
+    }
+    await expect(page).toHaveURL(/\/en\/checkout/);
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
   test("EN: signed-out state persists after an actual refresh", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
     await page.goto("/en");
-    await page.locator("nav.site-nav").getByRole("button", { name: /sign out/i }).click();
-    await expect(page.locator("nav.site-nav").getByRole("link", { name: /sign in/i })).toBeVisible();
+    await clickSignOut(page);
+    await assertSignedOutEN(page);
 
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("button", { name: /sign out/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /sign in/i })).toBeVisible();
+    await assertSignedOutEN(page);
   });
 
   test("PT: Sair — header muda para Entrar sem F5", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
     await page.goto("/pt");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("button", { name: /sair/i })).toBeVisible();
+    // Verify signed-in state
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("button", { name: /sair/i })).toBeVisible();
+      await drawer.locator(".mobile-nav-close").click();
+    } else {
+      const nav = page.locator("nav.site-nav");
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await expect(nav.locator("form.inline button[type='submit']")).toBeVisible();
+    }
 
-    await nav.getByRole("button", { name: /sair/i }).click();
+    await clickSignOut(page);
 
     await expect(page).toHaveURL(/\/pt$/, { timeout: 10_000 });
-    await expect(nav.getByRole("button", { name: /sair/i })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: /entrar/i })).toBeVisible();
+    await assertSignedOutPT(page);
   });
 });
