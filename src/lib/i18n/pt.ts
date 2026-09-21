@@ -69,6 +69,7 @@ const pt: Dictionary = {
     addToCart: "Adicionar ao carrinho",
     addedToCart: "Adicionado ao carrinho",
     viewCart: "Ver carrinho",
+    maxKnivesError: "Você pode adicionar até 100 facas por pedido.",
     remove: "Remover",
     clear: "Limpar carrinho",
     continueShopping: "Continuar comprando",

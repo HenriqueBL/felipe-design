@@ -1,6 +1,6 @@
 # Banco de dados - Felipe Design
 
-> Migrations versionadas em `supabase/migrations`. Nomes em snake_case; aplicar com `supabase db push` ou SQL Editor na ordem 0001-0011.
+> Migrations versionadas em `supabase/migrations`; aplicar migrations pendentes em ordem de versão com `supabase db push` ou SQL Editor.
 
 ## Enumerações
 

@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   CART_MAX_ITEMS,
+  CART_MAX_TOTAL_KNIVES,
   CART_STORAGE_KEY,
   cartOutputImages,
   normalizeCart,
 } from "@/domain/cart";
+import { addToCart, clearCart, readCart, updateQuantity } from "@/lib/cart-store";
 
 describe("normalizeCart", () => {
   it("accepts a valid cart", () => {
@@ -123,5 +126,69 @@ describe("cartOutputImages", () => {
       items: [{ planId: "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", quantity: 2 }],
     };
     expect(cartOutputImages(cart, {})).toBe(0);
+  });
+});
+
+describe("CartMutationResult — addToCart / updateQuantity", () => {
+  beforeEach(() => {
+    clearCart();
+  });
+  afterEach(() => {
+    clearCart();
+  });
+
+  it("60 + 40 passes with exact quantities", () => {
+    const r1 = addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", 60, "BRL");
+    expect(r1.error).toBeNull();
+    const r2 = addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 40, "BRL");
+    expect(r2.error).toBeNull();
+    expect(r2.cart?.items).toHaveLength(2);
+    const q1 = r2.cart?.items.find((i) => i.planId === "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001")?.quantity;
+    const q2 = r2.cart?.items.find((i) => i.planId === "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002")?.quantity;
+    expect(q1).toBe(60);
+    expect(q2).toBe(40);
+  });
+
+  it("60 existing + attempt 41 rejects with MAX_TOTAL_KNIVES and preserves state", () => {
+    addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", 60, "BRL");
+    const before = readCart();
+    const result = addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 41, "BRL");
+    expect(result.error).toBe("MAX_TOTAL_KNIVES");
+    const after = readCart();
+    expect(after).toEqual(before);
+    expect(after?.items).toHaveLength(1);
+    expect(after?.items[0]?.quantity).toBe(60);
+  });
+
+  it("99 + 1 passes", () => {
+    addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", 99, "BRL");
+    const result = addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 1, "BRL");
+    expect(result.error).toBeNull();
+    expect(result.cart?.items).toHaveLength(2);
+  });
+
+  it("100 + 1 rejects with MAX_TOTAL_KNIVES and cart identical to previous", () => {
+    addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", 100, "BRL");
+    const before = readCart();
+    const result = addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 1, "BRL");
+    expect(result.error).toBe("MAX_TOTAL_KNIVES");
+    const after = readCart();
+    expect(after).toEqual(before);
+    expect(after?.items).toHaveLength(1);
+    expect(after?.items[0]?.quantity).toBe(100);
+  });
+
+  it("updateQuantity 40->41 when 60 exists rejects and preserves 60+40", () => {
+    addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001", 60, "BRL");
+    addToCart("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 40, "BRL");
+    const before = readCart();
+    const result = updateQuantity("b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002", 41);
+    expect(result.error).toBe("MAX_TOTAL_KNIVES");
+    const after = readCart();
+    expect(after).toEqual(before);
+    const q1 = after?.items.find((i) => i.planId === "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0001")?.quantity;
+    const q2 = after?.items.find((i) => i.planId === "b3d0c2f1-5f45-4a67-9e5f-8e3e3e1a0002")?.quantity;
+    expect(q1).toBe(60);
+    expect(q2).toBe(40);
   });
 });

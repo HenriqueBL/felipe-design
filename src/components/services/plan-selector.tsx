@@ -14,6 +14,7 @@ interface PlanSelectorLabels {
   addedToCart: string;
   viewCart: string;
   unavailable: string;
+  maxKnivesError: string;
 }
 
 interface PlanSelectorProps {
@@ -33,6 +34,7 @@ export default function PlanSelector({
 }: PlanSelectorProps) {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [limitError, setLimitError] = useState(false);
 
   function handleQuantity(value: string) {
     const parsed = Number(value);
@@ -44,8 +46,14 @@ export default function PlanSelector({
   // O carrinho guarda apenas intenção (planId/quantity/currency); o servidor
   // revalida planos e precos no checkout. Nenhum preco vem do browser.
   function handleAddToCart() {
-    addToCart(planId, quantity, currency);
+    const result = addToCart(planId, quantity, currency);
+    if (result.error === "MAX_TOTAL_KNIVES") {
+      setAdded(false);
+      setLimitError(true);
+      return;
+    }
     setAdded(true);
+    setLimitError(false);
   }
 
   return (
@@ -72,6 +80,11 @@ export default function PlanSelector({
       {added ? (
         <p className="plan-added-note">
           {labels.addedToCart} <Link href={cartPath(locale)}>{labels.viewCart}</Link>
+        </p>
+      ) : null}
+      {limitError ? (
+        <p className="plan-limit-error" role="alert">
+          {labels.maxKnivesError}
         </p>
       ) : null}
     </div>

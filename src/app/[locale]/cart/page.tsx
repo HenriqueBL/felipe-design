@@ -60,6 +60,7 @@ export default async function CartPage({
           clear: dictionary.cart.clear,
           continueShopping: dictionary.cart.continueShopping,
           checkout: dictionary.cart.checkout,
+          maxKnivesError: dictionary.cart.maxKnivesError,
         }}
       />
     </main>

@@ -30,6 +30,7 @@ export interface CartViewLabels {
   clear: string;
   continueShopping: string;
   checkout: string;
+  maxKnivesError: string;
 }
 
 interface CartViewProps {
@@ -71,6 +72,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
   const [cart, setCart] = useState<Cart | null>(null);
   const [pricing, setPricing] = useState<Map<string, CartPricingItem>>(new Map());
   const [loaded, setLoaded] = useState(false);
+  const [limitErrorPlanId, setLimitErrorPlanId] = useState<string | null>(null);
 
   const refresh = useCallback(async (current: Cart | null) => {
     setCart(current);
@@ -153,7 +155,15 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
                   onChange={(event) => {
                     const parsed = Number(event.target.value);
                     if (Number.isFinite(parsed)) {
-                      updateQuantity(item.planId, Math.min(100, Math.max(1, Math.trunc(parsed))));
+                      const result = updateQuantity(
+                        item.planId,
+                        Math.min(100, Math.max(1, Math.trunc(parsed))),
+                      );
+                      if (result.error === "MAX_TOTAL_KNIVES") {
+                        setLimitErrorPlanId(item.planId);
+                      } else {
+                        setLimitErrorPlanId(null);
+                      }
                     }
                   }}
                 />
@@ -161,6 +171,11 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
                   {labels.remove}
                 </button>
               </div>
+              {limitErrorPlanId === item.planId ? (
+                <p className="cart-limit-error" role="alert">
+                  {labels.maxKnivesError}
+                </p>
+              ) : null}
               {info?.priceCents != null ? (
                 <p className="cart-item-subtotal">
                   {labels.subtotal}:{" "}

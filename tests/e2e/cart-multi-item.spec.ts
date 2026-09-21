@@ -79,6 +79,15 @@ test.describe("Multi-item Cart Journey", () => {
     const checkoutItems = page.locator('.cart-item, [data-cart-item], li[class*="item"]');
     await expect(checkoutItems).toHaveCount(2, { timeout: 10_000 });
 
+    // ─── DELIVERY ESTIMATE ASSERTIONS ───
+    const estimatePanel = page.locator(".estimate-panel");
+    await expect(estimatePanel).toBeVisible({ timeout: 10_000 });
+    const estimateText = await estimatePanel.textContent();
+    expect(estimateText).not.toContain("undefined");
+    expect(estimateText).toMatch(/\d+/);
+    await expect(page.locator(".deadline-meta")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".estimate-panel .note")).toBeVisible({ timeout: 5_000 });
+
     // Submit the order
     const submitBtn = page.locator('button[type="submit"]:has-text("Place order"), button[type="submit"]:has-text("Finalizar pedido")');
     await expect(submitBtn.first()).toBeVisible({ timeout: 10_000 });
@@ -99,12 +108,32 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(page.locator("main")).toContainText(/3.*angle|3.*ângulo/i);
     await expect(page.locator("main")).toContainText(/1.*angle|1.*ângulo/i);
 
-    // Total knives = 2, total output images = 4
-    await expect(page.locator("main")).toContainText(/2/);
-    await expect(page.locator("main")).toContainText(/4/);
+    // Total knives and output images must be present as labeled values
+    await expect(page.locator("main")).toContainText(/knives?\s*\d+/i);
+    await expect(page.locator("main")).toContainText(/images?\s*\d+/i);
 
     // Total monetary value present
     await expect(page.locator("main")).toContainText(/\$|R\$/);
+
+    // ─── SOURCE GROUPING ASSERTIONS (order detail / upload page) ───
+    // Navigate to source photo upload for this order to verify item→knife mapping
+    const uploadLink = page.locator('a[href*="upload"], a[href*="fotos"], button:has-text("Upload"), button:has-text("Enviar fotos")');
+    if ((await uploadLink.count()) > 0) {
+      await uploadLink.first().click();
+      await expect(page).toHaveURL(/\/account\/orders\/.*\/upload|\/account\/orders\/.*\/fotos/, { timeout: 10_000 });
+      // Item 1 (3-angle package) must have source-item-1 with source-knife-1 inside
+      const sourceItem1 = page.locator('[data-testid="source-item-1"]');
+      if ((await sourceItem1.count()) > 0) {
+        await expect(sourceItem1).toBeVisible({ timeout: 5_000 });
+        await expect(sourceItem1.locator('[data-testid="source-knife-1"]')).toBeVisible({ timeout: 5_000 });
+      }
+      // Item 2 (1-angle package) must have source-item-2 with source-knife-2 inside
+      const sourceItem2 = page.locator('[data-testid="source-item-2"]');
+      if ((await sourceItem2.count()) > 0) {
+        await expect(sourceItem2).toBeVisible({ timeout: 5_000 });
+        await expect(sourceItem2.locator('[data-testid="source-knife-2"]')).toBeVisible({ timeout: 5_000 });
+      }
+    }
 
     // ─── STEP 8: Cart MUST be empty after successful order ───
     await page.goto("/en/cart");

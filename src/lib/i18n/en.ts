@@ -67,6 +67,7 @@ const en = {
     addToCart: "Add to cart",
     addedToCart: "Added to cart",
     viewCart: "View cart",
+    maxKnivesError: "You can add up to 100 knives per order.",
     remove: "Remove",
     clear: "Clear cart",
     continueShopping: "Continue shopping",

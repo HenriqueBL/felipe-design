@@ -44,7 +44,11 @@ function writeCart(cart: Cart | null): void {
 // Aggregate knife limit is enforced HERE (not in normalizeCart) so that
 // exceeding the cap rejects the operation deterministically instead of
 // silently mutating unrelated items.
-export function addToCart(planId: string, quantity: number, currency: Currency): Cart | null {
+export function addToCart(
+  planId: string,
+  quantity: number,
+  currency: Currency,
+): CartMutationResult {
   const current = readCart() ?? { currency, items: [] };
   const baseItems = current.currency === currency ? current.items : [];
   // Merge with existing same-plan entry first (normalizeCart deduplicates later,
@@ -60,30 +64,36 @@ export function addToCart(planId: string, quantity: number, currency: Currency):
   }));
   if (cartTotalKnives(candidateItems) > CART_MAX_TOTAL_KNIVES) {
     // Reject: do NOT mutate cart, do NOT redistribute other items.
-    return current.items.length > 0 ? current : null;
+    return {
+      cart: current.items.length > 0 ? current : null,
+      error: "MAX_TOTAL_KNIVES",
+    };
   }
   const cart: Cart = { currency, items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
-  return normalized;
+  return { cart: normalized, error: null };
 }
 
-export function updateQuantity(planId: string, quantity: number): Cart | null {
+export function updateQuantity(
+  planId: string,
+  quantity: number,
+): CartMutationResult {
   const current = readCart();
   if (!current) {
-    return null;
+    return { cart: null, error: null };
   }
   const candidateItems = current.items.map((item) =>
     item.planId === planId ? { planId, quantity } : item,
   );
   if (cartTotalKnives(candidateItems) > CART_MAX_TOTAL_KNIVES) {
     // Reject: preserve previous state exactly.
-    return current;
+    return { cart: current, error: "MAX_TOTAL_KNIVES" };
   }
   const cart: Cart = { currency: current.currency, items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
-  return normalized;
+  return { cart: normalized, error: null };
 }
 
 export function removeItem(planId: string): Cart | null {
@@ -119,5 +129,12 @@ export function subscribeToCart(listener: () => void): () => void {
     window.removeEventListener("storage", listener);
   };
 }
+
+export type CartMutationError = "MAX_TOTAL_KNIVES";
+
+export type CartMutationResult = {
+  cart: Cart | null;
+  error: CartMutationError | null;
+};
 
 export type { Cart, CartItem };

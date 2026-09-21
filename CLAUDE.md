@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run typecheck` — `tsc --noEmit`; must pass with zero errors before commit
 - `npm test` — Vitest run (business rules: pricing, business-days, queue)
 - `npx vitest tests/queue.test.ts` — run a single test file
-- `supabase db push` — apply migrations in order (0001 through 0011)
+- `supabase db push` — apply pending migrations in version order
 
 ## Architecture
 

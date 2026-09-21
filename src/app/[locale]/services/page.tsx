@@ -134,6 +134,7 @@ export default async function ServicesPage({
                       addedToCart: dictionary.cart.addedToCart,
                       viewCart: dictionary.cart.viewCart,
                       unavailable: dictionary.services.unavailable,
+                      maxKnivesError: dictionary.cart.maxKnivesError,
                     }}
                   />
                 </article>
