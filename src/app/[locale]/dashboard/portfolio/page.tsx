@@ -5,6 +5,7 @@ import PortfolioCreateForm from "@/components/dashboard/portfolio-create-form";
 import PortfolioItemForm from "@/components/dashboard/portfolio-item-form";
 import { redirect } from "next/navigation";
 import type { PortfolioItemRow } from "@/types/database";
+import { resolvePortfolioMedia, portfolioPublicUrl } from "@/services/portfolio";
 
 export default async function PortfolioAdminPage({
   params,
@@ -20,6 +21,7 @@ export default async function PortfolioAdminPage({
 
   const d = await getDictionary(locale === "pt" ? "pt" : "en");
   const db = d.dashboard;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
   const { data: items } = await supabase
     .from("portfolio_items")
@@ -79,7 +81,14 @@ export default async function PortfolioAdminPage({
                 key={item.id}
                 locale={locale}
                 item={item as PortfolioItemRow}
-                imageUrl={item.image_storage_path ?? item.after_storage_path ?? null}
+                imageUrl={(() => {
+                  const mediaPath = resolvePortfolioMedia({
+                    imageStoragePath: item.image_storage_path,
+                    beforeStoragePath: item.before_storage_path,
+                    afterStoragePath: item.after_storage_path,
+                  });
+                  return mediaPath ? portfolioPublicUrl(supabaseUrl, mediaPath) : null;
+                })()}
                 labels={{
                   itemTitle: db.portfolioItemTitle,
                   description: db.portfolioItemDescription,
