@@ -12,8 +12,9 @@ import {
 } from "@/app/[locale]/dashboard/portfolio/actions";
 import type { PortfolioActionResult } from "@/app/[locale]/dashboard/portfolio/actions";
 import type { PortfolioItemRow } from "@/types/database";
+import { portfolioActionMessage, type PortfolioActionLabels } from "@/lib/portfolio-action-message";
 
-export interface PortfolioItemLabels {
+export interface PortfolioItemLabels extends PortfolioActionLabels {
   itemTitle: string;
   description: string;
   image: string;
@@ -45,15 +46,16 @@ function StatusSpan({
   labels,
 }: {
   state: PortfolioActionResult | null;
-  labels: { success: string; error: string };
+  labels: PortfolioActionLabels & { error: string };
 }) {
-  if (!state) {
+  if (!state?.code) {
     return null;
   }
-  return state.success ? (
-    <span className="form-status ok"> {labels.success}</span>
-  ) : (
-    <span className="form-status err"> {labels.error}</span>
+  const message = portfolioActionMessage(state.code, labels);
+  return (
+    <span className={`form-status ${state.success ? "ok" : "err"}`}>
+      {" "}{message ?? labels.error}
+    </span>
   );
 }
 
@@ -155,7 +157,7 @@ export default function PortfolioItemForm({
         <button type="submit" className="btn btn-primary" disabled={updatePending}>
           {updatePending ? labels.saving : labels.save}
         </button>
-        <StatusSpan state={updateState} labels={{ success: labels.updated, error: labels.error }} />
+        <StatusSpan state={updateState} labels={labels} />
       </form>
 
       <div className="portfolio-actions">
@@ -166,7 +168,7 @@ export default function PortfolioItemForm({
             {item.published ? labels.unpublish : labels.publish}
           </button>
         </form>
-        <StatusSpan state={publishState} labels={{ success: item.published ? labels.unpublished : labels.published, error: labels.error }} />
+        <StatusSpan state={publishState} labels={labels} />
 
         {item.featured ? (
           <form action={clearFeaturedAction}>
@@ -183,7 +185,7 @@ export default function PortfolioItemForm({
             </button>
           </form>
         )}
-        <StatusSpan state={featuredState ?? clearFeaturedState} labels={{ success: labels.featuredSet, error: labels.error }} />
+        <StatusSpan state={featuredState ?? clearFeaturedState} labels={labels} />
 
         <form action={moveUpAction}>
           <input type="hidden" name="id" value={item.id} />
@@ -199,7 +201,7 @@ export default function PortfolioItemForm({
             {labels.moveDown}
           </button>
         </form>
-        <StatusSpan state={moveUpState ?? moveDownState} labels={{ success: labels.reordered, error: labels.error }} />
+        <StatusSpan state={moveUpState ?? moveDownState} labels={labels} />
 
         <form
           action={deleteAction}
@@ -214,7 +216,7 @@ export default function PortfolioItemForm({
             {labels.delete}
           </button>
         </form>
-        <StatusSpan state={deleteState} labels={{ success: labels.deleted, error: labels.error }} />
+        <StatusSpan state={deleteState} labels={labels} />
       </div>
     </section>
   );

@@ -185,33 +185,42 @@ describe("Portfolio — RLS (real JWT)", () => {
     expect(error!.message).toMatch(/permission|policy|forbidden/i);
   });
 
-  // NOTA: As policies atuais (migration 0002) usam is_admin() SECURITY DEFINER.
-  // Na prática DEV, customers autenticados conseguem UPDATE/DELETE porque não
-  // existe policy explícita de DENY para authenticated non-admin. INSERT está
-  // corretamente bloqueado. Corrigir isso requer nova migration (fora do escopo).
-  it("customer JWT UPDATE: comportamento atual das policies (documentação)", async () => {
-    const row = await insertFixture();
-    const { error } = await customerJwt
+  it("customer JWT NÃO consegue UPDATE portfolio_item (row permanece inalterada)", async () => {
+    const originalTitle = `Original ${Date.now()}-${Math.random().toString(36).slice(2, 4)}`;
+    const row = await insertFixture({ title: originalTitle });
+    const attemptedTitle = `Customer update ${Date.now()}`;
+
+    // Customer tenta atualizar — RLS pode retornar sem erro mas afetar 0 rows
+    await customerJwt
       .from("portfolio_items")
-      .update({ title: "Customer update attempt" })
+      .update({ title: attemptedTitle })
       .eq("id", row.id);
-    // Com as policies atuais, UPDATE pode passar. Quando nova migration
-    // adicionar DENY explícito, este teste deve esperar erro.
-    if (error) {
-      expect(error.message).toMatch(/permission|policy|forbidden/i);
-    }
+
+    // Verificar via service_role que o title NÃO mudou
+    const { data } = await serviceRole
+      .from("portfolio_items")
+      .select("title")
+      .eq("id", row.id)
+      .single();
+    expect(data?.title).toBe(originalTitle);
   });
 
-  it("customer JWT DELETE: comportamento atual das policies (documentação)", async () => {
+  it("customer JWT NÃO consegue DELETE portfolio_item (row continua existindo)", async () => {
     const row = await insertFixture();
-    const { error } = await customerJwt
+
+    // Customer tenta deletar — RLS pode retornar sem erro mas afetar 0 rows
+    await customerJwt
       .from("portfolio_items")
       .delete()
       .eq("id", row.id);
-    // Mesma nota: DELETE pode passar com policies atuais.
-    if (error) {
-      expect(error.message).toMatch(/permission|policy|forbidden/i);
-    }
+
+    // Verificar via service_role que a row AINDA existe
+    const { data } = await serviceRole
+      .from("portfolio_items")
+      .select("id")
+      .eq("id", row.id)
+      .maybeSingle();
+    expect(data?.id).toBe(row.id);
   });
 
   it("anon NÃO consegue INSERT portfolio_item", async () => {

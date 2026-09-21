@@ -3,8 +3,9 @@
 import { useActionState, useState } from "react";
 import { createPortfolioItemAction } from "@/app/[locale]/dashboard/portfolio/actions";
 import type { PortfolioActionResult } from "@/app/[locale]/dashboard/portfolio/actions";
+import { portfolioActionMessage, type PortfolioActionLabels } from "@/lib/portfolio-action-message";
 
-interface CreateLabels {
+interface CreateLabels extends PortfolioActionLabels {
   title: string;
   itemTitle: string;
   description: string;
@@ -14,8 +15,6 @@ interface CreateLabels {
   published: string;
   button: string;
   pending: string;
-  success: string;
-  error: string;
 }
 
 export default function PortfolioCreateForm({
@@ -67,11 +66,10 @@ export default function PortfolioCreateForm({
         <button type="submit" className="btn btn-primary" disabled={isPending}>
           {isPending ? labels.pending : labels.button}
         </button>
-        {state?.success === true ? (
-          <span className="form-status ok"> {labels.success}</span>
-        ) : null}
-        {state?.success === false ? (
-          <span className="form-status err"> {labels.error}</span>
+        {state?.code ? (
+          <span className={`form-status ${state.success ? "ok" : "err"}`}>
+            {" "}{portfolioActionMessage(state.code, labels) ?? (state.success ? labels.created : labels.forbidden)}
+          </span>
         ) : null}
       </form>
     </section>

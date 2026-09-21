@@ -1,102 +1,131 @@
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isAdminUser } from "@/services/auth";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
-import { requireEnv } from "@/lib/env";
-import {
-  listAllPortfolioItems,
-  portfolioPublicUrl,
-  resolvePortfolioMedia,
-} from "@/services/portfolio";
 import PortfolioCreateForm from "@/components/dashboard/portfolio-create-form";
 import PortfolioItemForm from "@/components/dashboard/portfolio-item-form";
+import { redirect } from "next/navigation";
+import type { PortfolioItemRow } from "@/types/database";
 
-export default async function DashboardPortfolioPage({
+export default async function PortfolioAdminPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const current: Locale = isLocale(locale) ? locale : defaultLocale;
-  const dictionary = await getDictionary(current);
-  const d = dictionary.dashboard;
+  const supabase = await createSupabaseServerClient();
+  const admin = await isAdminUser();
+  if (!admin) {
+    redirect(`/${locale}`);
+  }
 
-  const items = await listAllPortfolioItems();
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const d = await getDictionary(locale === "pt" ? "pt" : "en");
+  const db = d.dashboard;
+
+  const { data: items } = await supabase
+    .from("portfolio_items")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
 
   return (
-    <div>
-      <h1>{d.portfolioTitle}</h1>
-      <p className="note">{d.portfolioIntro}</p>
+    <main className="container dashboard">
+      <h1>{db.portfolioTitle}</h1>
+      <p className="note">{db.portfolioIntro}</p>
 
       <PortfolioCreateForm
-        locale={current}
+        locale={locale}
         labels={{
-          title: d.portfolioAddTitle,
-          itemTitle: d.portfolioItemTitle,
-          description: d.portfolioItemDescription,
-          image: d.portfolioItemImage,
-          imageHint: d.portfolioItemImageHint,
-          sortOrder: d.portfolioItemSortOrder,
-          published: d.portfolioItemPublished,
-          button: d.portfolioAddButton,
-          pending: d.portfolioAdding,
-          success: d.portfolioAdded,
-          error: d.saveError,
+          title: db.portfolioAddTitle,
+          itemTitle: db.portfolioItemTitle,
+          description: db.portfolioItemDescription,
+          image: db.portfolioItemImage,
+          imageHint: db.portfolioItemImageHint,
+          sortOrder: db.portfolioItemSortOrder,
+          published: db.portfolioItemPublished,
+          button: db.portfolioAddButton,
+          pending: db.portfolioAdding,
+          // Action code i18n labels (mapped from state.code)
+          forbidden: db.portfolioActionForbidden,
+          invalidInput: db.portfolioActionInvalidInput,
+          imageRequired: db.portfolioActionImageRequired,
+          imageInvalid: db.portfolioActionImageInvalid,
+          createFailed: db.portfolioActionCreateFailed,
+          updateFailed: db.portfolioActionUpdateFailed,
+          publishFailed: db.portfolioActionPublishFailed,
+          featuredFailed: db.portfolioActionFeaturedFailed,
+          clearFeaturedFailed: db.portfolioActionClearFeaturedFailed,
+          reorderFailed: db.portfolioActionReorderFailed,
+          notFound: db.portfolioActionNotFound,
+          deleteFailed: db.portfolioActionDeleteFailed,
+          created: db.portfolioActionCreated,
+          updated: db.portfolioActionUpdated,
+          publishedAction: db.portfolioActionPublished,
+          unpublished: db.portfolioActionUnpublished,
+          featuredSet: db.portfolioActionFeaturedSet,
+          featuredCleared: db.portfolioActionFeaturedCleared,
+          reordered: db.portfolioActionReordered,
+          deleted: db.portfolioActionDeleted,
         }}
       />
 
-      {items.length === 0 ? (
-        <p className="note">{d.portfolioEmpty}</p>
-      ) : (
-        items.map((item) => (
-          <PortfolioItemForm
-            key={item.id}
-            locale={current}
-            item={item}
-            imageUrl={
-              resolvePortfolioMedia({
-                imageStoragePath: item.image_storage_path,
-                beforeStoragePath: item.before_storage_path,
-                afterStoragePath: item.after_storage_path,
-              })
-                ? portfolioPublicUrl(
-                    supabaseUrl,
-                    resolvePortfolioMedia({
-                      imageStoragePath: item.image_storage_path,
-                      beforeStoragePath: item.before_storage_path,
-                      afterStoragePath: item.after_storage_path,
-                    })!,
-                  )
-                : null
-            }
-            labels={{
-              itemTitle: d.portfolioItemTitle,
-              description: d.portfolioItemDescription,
-              image: d.portfolioItemImage,
-              imageHint: d.portfolioItemImageHint,
-              sortOrder: d.portfolioItemSortOrder,
-              published: d.portfolioItemPublished,
-              unpublished: d.portfolioActionUnpublished,
-              featured: d.portfolioItemFeatured,
-              featuredSet: d.portfolioActionFeaturedSet,
-              featuredCleared: d.portfolioActionFeaturedCleared,
-              save: d.portfolioUpdateButton,
-              saving: d.portfolioUpdating,
-              updated: d.portfolioActionUpdated,
-              reordered: d.portfolioActionReordered,
-              deleted: d.portfolioActionDeleted,
-              error: d.saveError,
-              publish: d.portfolioPublish,
-              unpublish: d.portfolioUnpublish,
-              setFeatured: d.portfolioSetFeatured,
-              removeFeatured: d.portfolioRemoveFeatured,
-              moveUp: d.portfolioMoveUp,
-              moveDown: d.portfolioMoveDown,
-              delete: d.portfolioDelete,
-              deleteConfirm: d.portfolioDeleteConfirm,
-            }}
-          />
-        ))
-      )}
-    </div>
+      <section className="panel">
+        <h2>{db.portfolioTitle}</h2>
+        {(items?.length ?? 0) === 0 ? (
+          <p className="note">{db.portfolioEmpty}</p>
+        ) : (
+          <div className="portfolio-list">
+            {items!.map((item) => (
+              <PortfolioItemForm
+                key={item.id}
+                locale={locale}
+                item={item as PortfolioItemRow}
+                imageUrl={item.image_storage_path ?? item.after_storage_path ?? null}
+                labels={{
+                  itemTitle: db.portfolioItemTitle,
+                  description: db.portfolioItemDescription,
+                  image: db.portfolioItemImage,
+                  imageHint: db.portfolioItemImageHint,
+                  sortOrder: db.portfolioItemSortOrder,
+                  published: db.portfolioItemPublished,
+                  unpublished: db.portfolioActionUnpublished,
+                  featured: db.portfolioItemFeatured,
+                  featuredSet: db.portfolioActionFeaturedSet,
+                  featuredCleared: db.portfolioActionFeaturedCleared,
+                  save: db.portfolioUpdateButton,
+                  saving: db.portfolioUpdating,
+                  updated: db.portfolioActionUpdated,
+                  reordered: db.portfolioActionReordered,
+                  deleted: db.portfolioActionDeleted,
+                  error: db.saveError,
+                  publish: db.portfolioPublish,
+                  unpublish: db.portfolioUnpublish,
+                  setFeatured: db.portfolioSetFeatured,
+                  removeFeatured: db.portfolioRemoveFeatured,
+                  moveUp: db.portfolioMoveUp,
+                  moveDown: db.portfolioMoveDown,
+                  delete: db.portfolioDelete,
+                  deleteConfirm: db.portfolioDeleteConfirm,
+                  // Action code i18n labels (mapped from state.code)
+                  forbidden: db.portfolioActionForbidden,
+                  invalidInput: db.portfolioActionInvalidInput,
+                  imageRequired: db.portfolioActionImageRequired,
+                  imageInvalid: db.portfolioActionImageInvalid,
+                  createFailed: db.portfolioActionCreateFailed,
+                  updateFailed: db.portfolioActionUpdateFailed,
+                  publishFailed: db.portfolioActionPublishFailed,
+                  featuredFailed: db.portfolioActionFeaturedFailed,
+                  clearFeaturedFailed: db.portfolioActionClearFeaturedFailed,
+                  reorderFailed: db.portfolioActionReorderFailed,
+                  notFound: db.portfolioActionNotFound,
+                  deleteFailed: db.portfolioActionDeleteFailed,
+                  created: db.portfolioActionCreated,
+                  publishedAction: db.portfolioActionPublished,
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
