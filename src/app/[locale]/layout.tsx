@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { Inter, Instrument_Serif } from "next/font/google";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, locales, type Locale } from "@/lib/i18n/config";
 import {
@@ -15,7 +16,21 @@ import {
 import { publicPath, siteUrl } from "@/lib/site";
 import AuthNav from "@/components/auth-nav";
 import CartBadge from "@/components/cart/cart-badge";
+import MobileNav from "@/components/mobile-nav";
 import "../globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const instrumentSerif = Instrument_Serif({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+});
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -80,11 +95,16 @@ export default async function LocaleLayout({
   const year = new Date().getFullYear();
 
   return (
-    <html lang={current}>
-      <body>
+    <html lang={current} className={`${inter.variable} ${instrumentSerif.variable}`}>
+      <body className="cinematic-shell">
         <a className="skip-link" href="#main-content">
           {dictionary.common.skipToContent}
         </a>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var h=document.querySelector('.site-header');if(!h)return;var t=60;function u(){h.classList.toggle('scrolled',window.scrollY>t)}u();window.addEventListener('scroll',u,{passive:true})})();`,
+          }}
+        />
         <header className="site-header">
           <div className="container">
             <Link href={homePath(current)} className="brand">
@@ -117,6 +137,19 @@ export default async function LocaleLayout({
                 </Link>
               </div>
             </nav>
+            <MobileNav
+              locale={current}
+              labels={{
+                home: dictionary.nav.home,
+                services: dictionary.nav.services,
+                about: dictionary.nav.about,
+                gallery: dictionary.nav.gallery,
+                account: dictionary.nav.account,
+                login: dictionary.nav.login,
+                logout: dictionary.nav.logout,
+                cart: dictionary.nav.cart,
+              }}
+            />
           </div>
         </header>
         <div id="main-content" tabIndex={-1}>

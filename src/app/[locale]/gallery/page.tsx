@@ -82,16 +82,24 @@ export default async function GalleryPage({
 
   return (
     <main>
-      <section className="page-hero">
+      {/* ─── CINEMATIC PAGE HERO ─────────────────────────────── */}
+      <section className="cinematic-page-hero">
         <div className="container">
+          <p className="section-eyebrow">
+            {locale === "pt" ? "Portfólio" : "Portfolio"}
+          </p>
           <h1>{dictionary.gallery.title}</h1>
-          <p className="about-lede">{dictionary.gallery.subtitle}</p>
+          <p className="cinematic-page-subtitle">
+            {dictionary.gallery.subtitle}
+          </p>
         </div>
       </section>
-      <section className="section">
+
+      {/* ─── GALLERY GRID ────────────────────────────────────── */}
+      <section className="section cinematic-gallery-section">
         <div className="container">
           {items.length === 0 ? (
-            <div className="state-note">
+            <div className="cinematic-empty-state">
               <h2>{dictionary.gallery.emptyTitle}</h2>
               <p>{dictionary.gallery.emptyBody}</p>
               <Link href={servicesPath(locale)} className="btn btn-primary">
@@ -99,24 +107,30 @@ export default async function GalleryPage({
               </Link>
             </div>
           ) : (
-            <div className="gallery-grid">
-              {items.map((item) =>
+            <div className="cinematic-masonry-grid">
+              {items.map((item, idx) =>
                 item.src ? (
-                  <figure key={item.key} className="gallery-item">
-                    <Image
-                      src={item.src}
-                      alt={item.title}
-                      width={800}
-                      height={600}
-                      sizes="(max-width: 720px) 100vw, (max-width: 1080px) 50vw, 33vw"
-                    />
-                    {item.description ? (
-                      <figcaption>
-                        <strong>{item.title}</strong> — {item.description}
-                      </figcaption>
-                    ) : item.title ? (
-                      <figcaption>{item.title}</figcaption>
-                    ) : null}
+                  <figure
+                    key={item.key}
+                    className={`cinematic-masonry-item ${idx % 3 === 0 ? "wide" : ""}`}
+                  >
+                    <div className="cinematic-masonry-image-wrap">
+                      <Image
+                        src={item.src}
+                        alt={item.title}
+                        width={900}
+                        height={600}
+                        sizes="(max-width: 600px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="cinematic-masonry-img"
+                      />
+                      <div className="cinematic-masonry-overlay" aria-hidden="true" />
+                    </div>
+                    <figcaption className="cinematic-masonry-caption">
+                      <span className="cinematic-masonry-title">{item.title}</span>
+                      {item.description && (
+                        <span className="cinematic-masonry-desc">{item.description}</span>
+                      )}
+                    </figcaption>
                   </figure>
                 ) : null,
               )}
