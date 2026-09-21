@@ -195,7 +195,7 @@ export async function authenticateBrowserPage(
   await page.click('button[type="submit"]');
 
   // Wait for success message confirming email was sent
-  await expect(page.locator('.form-status.ok, p:has-text("Check your inbox")')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".form-status.ok")).toBeVisible({ timeout: 10_000 });
 
   // Step 3: Generate magic link via Admin API (bypasses actual email delivery)
   const verifyUrl = await generateMagicLink(email);

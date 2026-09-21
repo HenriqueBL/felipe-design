@@ -86,41 +86,39 @@ async function uploadPortfolioImage(file: File): Promise<string | null> {
 }
 
 /**
- * Verifica se um storage path ainda é referenciado por qualquer outro
- * portfolio_item (em image/before/after). Usado antes de remover objetos
- * do Storage para evitar quebrar mídia de outros itens.
+ * Verifica se um storage path ainda é referenciado por QUALQUER
+ * portfolio_item (em image/before/after), INCLUINDO o próprio item
+ * que está sendo atualizado. Isso protege cenários legacy onde
+ * after_storage_path == old image_storage_path: ao trocar a imagem
+ * principal, o path antigo NÃO pode ser removido porque o campo
+ * after ainda o referencia no mesmo row.
  */
 async function isStoragePathReferenced(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   path: string,
-  excludeItemId?: string,
 ): Promise<boolean> {
-  let query = supabase
+  const { data } = await supabase
     .from("portfolio_items")
     .select("id")
     .or(
       `image_storage_path.eq.${path},before_storage_path.eq.${path},after_storage_path.eq.${path}`,
     )
     .limit(1);
-  if (excludeItemId) {
-    query = query.neq("id", excludeItemId);
-  }
-  const { data } = await query;
   return (data?.length ?? 0) > 0;
 }
 
 /**
- * Remove um objeto do Storage somente se nenhum outro portfolio_item
- * referencia aquele path. Best-effort: falhas de remoção não quebram
+ * Remove um objeto do Storage somente se NENHUM portfolio_item
+ * (incluindo o próprio item atualizado) referencia aquele path em
+ * image/before/after. Best-effort: falhas de remoção não quebram
  * a operação principal.
  */
 async function safeRemoveStorageObject(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   path: string | null,
-  excludeItemId?: string,
 ): Promise<void> {
   if (!path) return;
-  const referenced = await isStoragePathReferenced(supabase, path, excludeItemId);
+  const referenced = await isStoragePathReferenced(supabase, path);
   if (!referenced) {
     await supabase.storage.from(PORTFOLIO_BUCKET).remove([path]);
   }
@@ -232,11 +230,12 @@ export async function updatePortfolioItemAction(
       return { success: false, code: "update_failed" };
     }
 
-    // Limpeza segura: remover imagem antiga apenas se não for referenciada
-    // por before/after do próprio item ou por qualquer outro item.
+    // Limpeza segura: remover imagem antiga apenas se NENHUM portfolio_item
+    // (incluindo o próprio item atualizado) ainda referencia esse path em
+    // image/before/after. Isso protege itens legacy onde after == old image.
     const oldPath = existing?.image_storage_path;
     if (oldPath && oldPath !== storagePath) {
-      await safeRemoveStorageObject(supabase, oldPath, parsed.data.id);
+      await safeRemoveStorageObject(supabase, oldPath);
     }
   } else {
     const { error } = await supabase
