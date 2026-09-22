@@ -52,12 +52,14 @@ describe("GET /auth/callback (origin publica)", () => {
     expect(location(response)).toBe(`${PUBLIC_ORIGIN}/en`);
   });
 
-  it("manda para /en/login quando a troca de sessao falha", async () => {
+  it("manda para /en/login com erro quando a troca de sessao falha", async () => {
     exchangeCodeForSession.mockResolvedValue({
       error: new Error("invalid_grant"),
     });
     const response = await GET(new Request(`${INTERNAL_URL}?code=bad`));
-    expect(location(response)).toBe(`${PUBLIC_ORIGIN}/en/login`);
+    const loc = location(response);
+    expect(loc).toContain(`${PUBLIC_ORIGIN}/en/login`);
+    expect(loc).toContain("error=callback_error");
   });
 
   it("manda para /en/login quando nao ha code", async () => {

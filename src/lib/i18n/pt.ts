@@ -66,6 +66,7 @@ const pt: Dictionary = {
     success: "Verifique sua caixa de entrada. Enviamos um link de acesso.",
     error: "Não foi possível enviar o link. Tente novamente.",
     rateLimited: "Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.",
+    callbackError: "Este link de acesso não é mais válido. Solicite um novo.",
   },
   services: {
     title: "Serviços",

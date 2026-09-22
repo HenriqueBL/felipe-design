@@ -26,16 +26,20 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
-  const { next: nextParam } = await searchParams;
+  const { next: nextParam, error: errorParam } = await searchParams;
   const current: Locale = isLocale(locale) ? locale : defaultLocale;
   const dictionary = await getDictionary(current);
   const next = typeof nextParam === "string" && isSafeNextPath(nextParam) ? nextParam : undefined;
+  const callbackError = errorParam === "callback_error";
 
   return (
     <main>
       <div className="auth-card">
         <h1>{dictionary.login.title}</h1>
         <p>{dictionary.login.description}</p>
+        {callbackError && (
+          <p className="form-status err">{dictionary.login.callbackError}</p>
+        )}
         <LoginForm locale={current} labels={dictionary.login} next={next} />
       </div>
     </main>
