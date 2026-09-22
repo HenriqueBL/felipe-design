@@ -40,7 +40,7 @@ export default async function LoginPage({
         {callbackError && (
           <p className="form-status err">{dictionary.login.callbackError}</p>
         )}
-        <LoginForm locale={current} labels={dictionary.login} next={next} callbackError={callbackError} />
+        <LoginForm locale={current} labels={dictionary.login} next={next} />
       </div>
     </main>
   );

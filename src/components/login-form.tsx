@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { siteUrl } from "@/lib/site";
 import type { Locale } from "@/lib/i18n/config";
 
 interface LoginLabels {
@@ -15,67 +16,85 @@ interface LoginLabels {
 
 interface LoginFormProps {
   locale: Locale;
-  labels: LoginLabels & { callbackError?: string };
+  labels: LoginLabels;
   next?: string;
-  callbackError?: boolean;
 }
 
-export default function LoginForm({ locale, labels, next, callbackError }: LoginFormProps) {
+export default function LoginForm({ locale, labels, next }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<
-    "idle" | "sending" | "sent" | "error" | "rate-limited" | "callback-error"
-  >(callbackError ? "callback-error" : "idle");
-  const supabase = createSupabaseBrowserClient();
+    "idle" | "sending" | "sent" | "error" | "rate-limited"
+  >("idle");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (status === "sending" || status === "sent") return;
+
     setStatus("sending");
+    const supabase = createSupabaseBrowserClient();
 
-    const redirectTo = next
-      ? `/auth/callback?next=${encodeURIComponent(next)}`
-      : `/auth/callback?next=/${locale}`;
+    // Build callback URL with locale-aware redirect target.
+    // The `next` param is preserved through the magic link flow so users
+    // land on their intended destination after authentication.
+    const callbackUrl = new URL("/auth/callback", siteUrl());
+    if (next) {
+      callbackUrl.searchParams.set("next", next);
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}${redirectTo}`,
+        emailRedirectTo: callbackUrl.toString(),
+        shouldCreateUser: true,
       },
     });
 
     if (error) {
-      // Rate limit do Supabase Auth: mensagem especifica, sem expor erro interno.
-      const isRateLimited =
+      // Supabase returns 429 / "over_email_send_rate_limit" for rate-limited requests.
+      // Map to a user-friendly message without exposing backend details.
+      const msg = error.message ?? "";
+      if (
         error.status === 429 ||
-        (error.code ?? "").toLowerCase() === "over_email_send_rate_limit";
-      setStatus(isRateLimited ? "rate-limited" : "error");
+        msg.includes("rate limit") ||
+        msg.includes("over_email_send_rate_limit")
+      ) {
+        setStatus("rate-limited");
+      } else {
+        setStatus("error");
+      }
       return;
     }
+
     setStatus("sent");
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="form-group">
-        <label htmlFor="email">{labels.emailLabel}</label>
-        <input
-          id="email"
-          type="email"
-          required
-          value={email}
-          placeholder={labels.emailPlaceholder}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={status === "sending"}>
-        {labels.submit}
+    <form onSubmit={handleSubmit} className="login-form">
+      <label htmlFor="login-email">{labels.emailLabel}</label>
+      <input
+        id="login-email"
+        type="email"
+        name="email"
+        required
+        autoComplete="email"
+        placeholder={labels.emailPlaceholder}
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={status === "sending" || status === "sent"}
+      />
+      <button
+        type="submit"
+        disabled={!email || status === "sending" || status === "sent"}
+      >
+        {status === "sending" ? "…" : labels.submit}
       </button>
-      {status === "sent" && <p className="form-status ok">{labels.success}</p>}
+
+      {status === "sent" && (
+        <p className="form-status ok">{labels.success}</p>
+      )}
       {status === "error" && <p className="form-status err">{labels.error}</p>}
       {status === "rate-limited" && (
         <p className="form-status err">{labels.rateLimited}</p>
-      )}
-      {status === "callback-error" && labels.callbackError && (
-        <p className="form-status err">{labels.callbackError}</p>
       )}
     </form>
   );

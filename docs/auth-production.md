@@ -24,7 +24,7 @@ In the Supabase Dashboard → Authentication → URL Configuration:
 | Field                  | DEV value                              | PROD value                                |
 | ---------------------- | -------------------------------------- | ----------------------------------------- |
 | Site URL               | `http://localhost:3000`                 | `https://felipesilvadesign.com`           |
-| Redirect URLs (allow)  | `http://localhost:3000/auth/callback/**` | `https://felipesilvadesign.com/auth/callback/**` |
+| Redirect URLs (allow)  | `http://localhost:3000/auth/callback` | `https://felipesilvadesign.com/auth/callback` |
 
 Add both `/en` and `/pt` variants if you want locale-specific landing
 pages after sign-in; the callback route handles them via `?next=`.
@@ -40,7 +40,7 @@ Supabase Auth sends magic links through its built-in email service by
 default. For production deliverability you should configure a custom
 SMTP provider.
 
-### Required SMTP fields (Supabase Dashboard → Project Settings → Email)
+### Required SMTP fields (Supabase Dashboard → Authentication → Emails → SMTP Settings)
 
 | Field             | Description                                      | Example                       |
 | ----------------- | ------------------------------------------------ | ----------------------------- |
@@ -96,7 +96,9 @@ Key requirements:
 - Reason for the email ("You requested a sign-in link").
 - Ignore-if-not-requested disclaimer.
 - No sensitive data beyond the recipient's own email.
-- Expiry notice.
+- Expiry notice. **Do not state a specific duration** (e.g. "1 hour") unless the
+  token lifetime has been verified in Dashboard → Authentication → Providers → Email → Token expiry.
+  Supabase defaults may differ; always match the template text to the configured value.
 
 ### Bilingual considerations
 
