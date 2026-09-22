@@ -71,7 +71,8 @@ export default async function CheckoutPage({
           title: dictionary.checkout.title,
           cartItemsTitle: dictionary.checkout.cartItemsTitle,
           invalidCart: dictionary.checkout.invalidCart,
-          anglesLabel: dictionary.services.anglesLabel,
+          angleSingularPerKnife: dictionary.services.angleSingularPerKnife,
+          anglePluralPerKnife: dictionary.services.anglePluralPerKnife,
           knivesLabel: dictionary.checkout.knivesLabel,
           imagesLabel: dictionary.checkout.imagesLabel,
           unitPrice: dictionary.checkout.unitPrice,
@@ -170,7 +171,10 @@ export default async function CheckoutPage({
             <div className="row">
               <span>{dictionary.checkout.planLabel}</span>
               <span>
-                {plan.angles} {dictionary.services.anglesLabel}
+                {plan.angles}{" "}
+                {plan.angles === 1
+                  ? dictionary.services.angleSingularPerKnife
+                  : dictionary.services.anglePluralPerKnife}
               </span>
             </div>
             <div className="row">

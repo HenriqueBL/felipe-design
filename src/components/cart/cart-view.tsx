@@ -19,7 +19,8 @@ export interface CartViewLabels {
   title: string;
   emptyTitle: string;
   emptyDescription: string;
-  anglesLabel: string;
+  angleSingularPerKnife: string;
+  anglePluralPerKnife: string;
   priceUnavailable: string;
   unitPrice: string;
   subtotal: string;
@@ -136,7 +137,10 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
             <li className="cart-item" key={item.planId}>
               <div className="cart-item-info">
                 <p className="cart-item-plan">
-                  {info ? info.angles : "?"} {labels.anglesLabel}
+                  {info ? info.angles : "?"}{" "}
+                  {info && info.angles === 1
+                    ? labels.angleSingularPerKnife
+                    : labels.anglePluralPerKnife}
                 </p>
                 <p className="cart-item-price">
                   {info?.priceCents != null
