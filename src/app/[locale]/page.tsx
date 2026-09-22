@@ -27,8 +27,8 @@ export default async function HomePage({
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
   // Parallelize independent Supabase fetches to reduce server-side waterfall.
-  // Each service already handles errors gracefully (returns null or []), so
-  // Promise.allSettled preserves that behavior without risking a 500.
+  // Portfolio services degrade to null/[] on failure; listActivePlans may throw.
+  // Promise.allSettled isolates failures so the Home page never 500s.
   const [featuredResult, publishedResult, plansResult] = await Promise.allSettled([
     getFeaturedPortfolioItem(),
     listPublishedPortfolioItems(),

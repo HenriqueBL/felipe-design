@@ -69,7 +69,8 @@ describe("sitemap", () => {
 describe("robots", () => {
   it("blocks cart/carrinho along with other non-public routes", () => {
     const config = robots();
-    const disallow = config.rules?.[0]?.disallow ?? [];
+    const rules = config.rules as Array<{ disallow?: string | string[] }> | undefined;
+    const disallow = rules?.[0]?.disallow ?? [];
 
     expect(disallow).toContain("/en/cart");
     expect(disallow).toContain("/pt/cart");
@@ -92,7 +93,8 @@ describe("robots", () => {
 
   it("does not block public pages", () => {
     const config = robots();
-    const disallow = config.rules?.[0]?.disallow ?? [];
+    const rules = config.rules as Array<{ disallow?: string | string[] }> | undefined;
+    const disallow = rules?.[0]?.disallow ?? [];
 
     // Public pages must NOT be blocked
     expect(disallow).not.toContain("/en");
