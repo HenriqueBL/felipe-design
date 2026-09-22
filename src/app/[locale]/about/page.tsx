@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
-import { aboutPath, galleryPath } from "@/lib/paths";
-import { siteUrl } from "@/lib/site";
+import { galleryPath } from "@/lib/paths";
+import { publicPath, siteUrl } from "@/lib/site";
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -21,7 +21,7 @@ export async function generateMetadata({
   }
   const dictionary = await getDictionary(locale);
   const base = siteUrl();
-  const canonical = base + aboutPath(locale);
+  const canonical = base + publicPath(locale, "about");
 
   return {
     title: dictionary.about.metaTitle,
@@ -29,18 +29,24 @@ export async function generateMetadata({
     alternates: {
       canonical,
       languages: {
-        en: base + "/en/about",
-        pt: base + "/pt/sobre",
-        "x-default": base + "/en/about",
+        en: base + publicPath("en", "about"),
+        pt: base + publicPath("pt", "about"),
+        "x-default": base + publicPath("en", "about"),
       },
     },
     openGraph: {
       type: "website",
       siteName: "Felipe Design",
       locale: locale === "pt" ? "pt_BR" : "en_US",
+      alternateLocale: locale === "pt" ? ["en_US"] : ["pt_BR"],
       title: dictionary.about.metaTitle,
       description: dictionary.about.metaDescription,
       url: canonical,
+    },
+    twitter: {
+      card: "summary",
+      title: dictionary.about.metaTitle,
+      description: dictionary.about.metaDescription,
     },
   };
 }

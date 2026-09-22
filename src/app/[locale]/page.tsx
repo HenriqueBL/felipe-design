@@ -24,28 +24,32 @@ export default async function HomePage({
   const current: Locale = isLocale(locale) ? locale : defaultLocale;
   const dictionary = await getDictionary(current);
 
-  const featured = await getFeaturedPortfolioItem();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  // Usa resolvedMediaPath (image → after → before) para suportar itens
-  // novos e legacy sem duplicar paths artificialmente.
+
+  // Parallelize independent Supabase fetches to reduce server-side waterfall.
+  // Each service already handles errors gracefully (returns null or []), so
+  // Promise.allSettled preserves that behavior without risking a 500.
+  const [featuredResult, publishedResult, plansResult] = await Promise.allSettled([
+    getFeaturedPortfolioItem(),
+    listPublishedPortfolioItems(),
+    listActivePlans(),
+  ]);
+
+  const featured =
+    featuredResult.status === "fulfilled" ? featuredResult.value : null;
+  const publishedItems =
+    publishedResult.status === "fulfilled" ? publishedResult.value : [];
+  const selectedWork = publishedItems.slice(0, 6);
+  const plans: ActivePlan[] =
+    plansResult.status === "fulfilled" ? plansResult.value : [];
+
+  // Uses resolvedMediaPath (image → after → before) to support new and legacy
+  // items without artificially duplicating paths.
   const heroSrc =
     featured && featured.resolvedMediaPath && supabaseUrl
       ? portfolioPublicUrl(supabaseUrl, featured.resolvedMediaPath)
       : HERO_FALLBACK_SRC;
   const heroAlt = featured ? featured.title : dictionary.home.heroTitle;
-
-  // Fetch published items for Selected Work section
-  const publishedItems = await listPublishedPortfolioItems();
-  const selectedWork = publishedItems.slice(0, 6);
-
-  // Fetch active plans for Services preview (safe fallback: never 500)
-  let plans: ActivePlan[] = [];
-  try {
-    plans = await listActivePlans();
-  } catch {
-    // Supabase unavailable: omit preview section gracefully
-    plans = [];
-  }
   const currency = current === "pt" ? "BRL" : "USD";
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 

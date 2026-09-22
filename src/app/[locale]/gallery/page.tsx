@@ -4,8 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, locales, type Locale } from "@/lib/i18n/config";
-import { galleryPath, servicesPath } from "@/lib/paths";
-import { siteUrl } from "@/lib/site";
+import { servicesPath } from "@/lib/paths";
+import { publicPath, siteUrl } from "@/lib/site";
 import { listPublishedPortfolioItems, portfolioPublicUrl } from "@/services/portfolio";
 
 export function generateStaticParams() {
@@ -23,7 +23,7 @@ export async function generateMetadata({
   }
   const dictionary = await getDictionary(locale);
   const base = siteUrl();
-  const canonical = base + galleryPath(locale);
+  const canonical = base + publicPath(locale, "gallery");
 
   return {
     title: dictionary.gallery.metaTitle,
@@ -31,18 +31,24 @@ export async function generateMetadata({
     alternates: {
       canonical,
       languages: {
-        en: base + "/en/gallery",
-        pt: base + "/pt/galeria",
-        "x-default": base + "/en/gallery",
+        en: base + publicPath("en", "gallery"),
+        pt: base + publicPath("pt", "gallery"),
+        "x-default": base + publicPath("en", "gallery"),
       },
     },
     openGraph: {
       type: "website",
       siteName: "Felipe Design",
       locale: locale === "pt" ? "pt_BR" : "en_US",
+      alternateLocale: locale === "pt" ? ["en_US"] : ["pt_BR"],
       title: dictionary.gallery.metaTitle,
       description: dictionary.gallery.metaDescription,
       url: canonical,
+    },
+    twitter: {
+      card: "summary",
+      title: dictionary.gallery.metaTitle,
+      description: dictionary.gallery.metaDescription,
     },
   };
 }
