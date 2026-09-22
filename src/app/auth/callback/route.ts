@@ -7,11 +7,25 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const nextParam = searchParams.get("next");
+  const errorParam = searchParams.get("error");
+  const errorDescription = searchParams.get("error_description");
   // Somente caminhos internos /en ou /pt (protecao contra open-redirect).
   const next = isSafeNextPath(nextParam) ? nextParam : "/en";
   // Atras do nginx/Docker o request.url carrega a origin interna (ex. 0.0.0.0:3000),
   // entao redirects publicos usam a origin configurada em NEXT_PUBLIC_SITE_URL.
   const baseUrl = siteUrl();
+
+  // Supabase redirects here with error params when the magic link is expired,
+  // already used, or otherwise invalid. Surface a user-friendly error page
+  // instead of silently looping back to login with no explanation.
+  if (errorParam) {
+    const loginUrl = new URL(`${baseUrl}/en/login`);
+    loginUrl.searchParams.set("error", "callback_error");
+    if (errorDescription) {
+      loginUrl.searchParams.set("error_description", errorDescription);
+    }
+    return NextResponse.redirect(loginUrl);
+  }
 
   if (code) {
     const supabase = await createSupabaseServerClient();
@@ -19,6 +33,13 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${baseUrl}${next}`);
     }
+    // Exchange failed (expired code, already consumed, etc.)
+    const loginUrl = new URL(`${baseUrl}/en/login`);
+    loginUrl.searchParams.set("error", "callback_error");
+    if (error.message) {
+      loginUrl.searchParams.set("error_description", error.message);
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.redirect(`${baseUrl}/en/login`);

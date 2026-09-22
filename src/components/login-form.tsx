@@ -15,15 +15,16 @@ interface LoginLabels {
 
 interface LoginFormProps {
   locale: Locale;
-  labels: LoginLabels;
+  labels: LoginLabels & { callbackError?: string };
   next?: string;
+  callbackError?: boolean;
 }
 
-export default function LoginForm({ locale, labels, next }: LoginFormProps) {
+export default function LoginForm({ locale, labels, next, callbackError }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<
-    "idle" | "sending" | "sent" | "error" | "rate-limited"
-  >("idle");
+    "idle" | "sending" | "sent" | "error" | "rate-limited" | "callback-error"
+  >(callbackError ? "callback-error" : "idle");
   const supabase = createSupabaseBrowserClient();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -72,6 +73,9 @@ export default function LoginForm({ locale, labels, next }: LoginFormProps) {
       {status === "error" && <p className="form-status err">{labels.error}</p>}
       {status === "rate-limited" && (
         <p className="form-status err">{labels.rateLimited}</p>
+      )}
+      {status === "callback-error" && labels.callbackError && (
+        <p className="form-status err">{labels.callbackError}</p>
       )}
     </form>
   );

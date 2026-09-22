@@ -64,6 +64,7 @@ const en = {
     success: "Check your inbox. We just sent you a sign-in link.",
     error: "We could not send the link. Please try again.",
     rateLimited: "Too many sign-in attempts. Please wait a few minutes and try again.",
+    callbackError: "This sign-in link is no longer valid. Please request a new one.",
   },
   services: {
     title: "Services",
