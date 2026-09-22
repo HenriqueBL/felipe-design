@@ -86,7 +86,7 @@ Dashboard → Authentication → Email Templates → Magic Link.
 <h2>Sign in to Felipe Design</h2>
 <p>You requested a sign-in link. Click below to continue:</p>
 <a href="{{ .ConfirmationURL }}">Sign in to Felipe Design</a>
-<p>If you didn't request this, ignore this email. The link expires in 1 hour.</p>
+<p>If you didn't request this, ignore this email. The sign-in link expires after the configured security period.</p>
 <p>This link is for <strong>{{ .Email }}</strong>. Do not share it.</p>
 ```
 
@@ -125,7 +125,7 @@ is the authority.
 ## Security checklist
 
 - [ ] `NEXT_PUBLIC_SITE_URL` set to canonical production domain.
-- [ ] Supabase redirect allowlist contains only `felipesilvadesign.com/auth/callback/**`.
+- [ ] Supabase redirect allowlist contains only `felipesilvadesign.com/auth/callback`.
 - [ ] `siteUrl()` used in all server-side redirects (callback, signout).
 - [ ] `isSafeNextPath()` validates every `next` parameter before redirect.
 - [ ] Service role key never exposed to browser or client components.
@@ -133,7 +133,7 @@ is the authority.
 - [ ] RLS policies enforce row-level access on `orders`, `profiles`, etc.
 - [ ] SMTP credentials stored in Supabase dashboard, not in `.env`.
 - [ ] No secrets in logs, error messages, or client bundles.
-- [ ] Magic link expiry set to reasonable duration (default 1h).
+- [ ] Magic link expiry configured appropriately for production (verify actual value in Dashboard → Authentication → Providers → Email → Token expiry).
 
 ## Testing
 
