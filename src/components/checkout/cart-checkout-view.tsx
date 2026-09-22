@@ -30,7 +30,8 @@ interface CartCheckoutLabels {
   title: string;
   cartItemsTitle: string;
   invalidCart: string;
-  anglesLabel: string;
+  angleSingularPerKnife: string;
+  anglePluralPerKnife: string;
   knivesLabel: string;
   imagesLabel: string;
   unitPrice: string;
@@ -189,8 +190,12 @@ export default function CartCheckoutView({
               return (
                 <li className="cart-item" key={item.planId}>
                   <div className="row">
-                    <span>{labels.anglesLabel}</span>
-                    <span>{info ? info.angles : "?"}</span>
+                    <span>
+                      {info ? info.angles : "?"}{" "}
+                      {info && info.angles === 1
+                        ? labels.angleSingularPerKnife
+                        : labels.anglePluralPerKnife}
+                    </span>
                   </div>
                   <div className="row">
                     <span>{labels.knivesLabel}</span>

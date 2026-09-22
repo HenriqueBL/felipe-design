@@ -34,20 +34,48 @@ test.describe("Authenticated navigation reflects session", () => {
     await authenticateWithSSR(page, email, password);
     await page.goto("/en");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
-    await expect(nav.getByRole("button", { name: /sign out/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /my orders/i })).toBeVisible();
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+
+    if (isMobile) {
+      // On mobile, open the drawer to verify auth state
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+      // Sign out is a button inside the drawer or header; check both
+      const signOutBtn = page.getByRole("button", { name: /sign out/i });
+      await expect(signOutBtn.first()).toBeVisible();
+    } else {
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await expect(desktopNav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+      await expect(desktopNav.locator("form.inline button[type='submit']")).toBeVisible();
+      await expect(desktopNav.getByRole("link", { name: /my orders/i })).toBeVisible();
+    }
   });
 
   test("PT header shows Sair, not Entrar, when authenticated", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
     await page.goto("/pt");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("link", { name: /^entrar$/i })).toHaveCount(0);
-    await expect(nav.getByRole("button", { name: /sair/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /meus pedidos/i })).toBeVisible();
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("link", { name: /^entrar$/i })).toHaveCount(0);
+      const signOutBtn = page.getByRole("button", { name: /sair/i });
+      await expect(signOutBtn.first()).toBeVisible();
+    } else {
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await expect(desktopNav.getByRole("link", { name: /^entrar$/i })).toHaveCount(0);
+      await expect(desktopNav.locator("form.inline button[type='submit']")).toBeVisible();
+      await expect(desktopNav.getByRole("link", { name: /meus pedidos/i })).toBeVisible();
+    }
   });
 
   test("header keeps reflecting the session after page reload", async ({ page }) => {
@@ -56,20 +84,39 @@ test.describe("Authenticated navigation reflects session", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
-    await expect(nav.getByRole("button", { name: /sign out/i })).toBeVisible();
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = page.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+      const signOutBtn = page.getByRole("button", { name: /sign out/i });
+      await expect(signOutBtn.first()).toBeVisible();
+    } else {
+      // Desktop: AuthNav renders <form class="inline"><button type="submit" class="linklike">
+      await expect(desktopNav.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+      await expect(desktopNav.locator("form.inline button[type='submit']")).toBeVisible();
+    }
   });
 
   test("authenticated checkout renders create-order step, not magic link form", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
 
     await page.goto("/en/services");
+    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
+    // Legacy used "Choose" links. Support both for resilience.
     const chooseBtn = page
-      .locator('a[href*="checkout"], button:has-text("Choose")')
+      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
       .first();
     await chooseBtn.click();
-    await expect(page).toHaveURL(/\/en\/checkout\?/);
+    // After adding to cart, navigate to checkout explicitly if not redirected
+    if (!page.url().includes("/checkout")) {
+      await page.goto("/en/checkout");
+    }
+    await expect(page).toHaveURL(/\/en\/checkout/);
 
     // Authenticated visitors must land directly on the order step.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();

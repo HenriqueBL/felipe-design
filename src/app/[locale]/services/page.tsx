@@ -81,13 +81,23 @@ export default async function ServicesPage({
 
   return (
     <main>
-      <section className="services-header">
+      {/* ─── CINEMATIC PAGE HERO ─────────────────────────────── */}
+      <section className="cinematic-page-hero">
         <div className="container">
+          <p className="section-eyebrow">
+            {dictionary.services.title}
+          </p>
           <h1>{dictionary.services.title}</h1>
-          <p>{dictionary.services.subtitle}</p>
-          <div className="currency-bar">
-            <span>{dictionary.services.currencySwitch}</span>
-            <div className="currency-toggle">
+          <p className="cinematic-page-subtitle">
+            {dictionary.services.subtitle}
+          </p>
+
+          {/* Currency Toggle — preserved logic, cinematic styling */}
+          <div className="cinematic-currency-bar">
+            <span className="cinematic-currency-label">
+              {dictionary.services.currencySwitch}
+            </span>
+            <div className="cinematic-currency-toggle">
               {CURRENCIES.map((option) => (
                 <Link
                   key={option}
@@ -98,50 +108,69 @@ export default async function ServicesPage({
                 </Link>
               ))}
             </div>
-            <span className="currency-note">{dictionary.services.currencyNote}</span>
+            <span className="cinematic-currency-note">
+              {dictionary.services.currencyNote}
+            </span>
           </div>
         </div>
       </section>
 
-      <section className="container">
-        {loadError ? (
-          <p className="state-note">{dictionary.services.loadError}</p>
-        ) : plans.length === 0 ? (
-          <p className="state-note">{dictionary.services.noPlans}</p>
-        ) : (
-          <div className="services-grid">
-            {plans.map((plan) => {
-              const price = plan.prices[currency];
-              return (
-                <article className="plan-card" key={plan.id}>
-                  <div className="plan-angles">
-                    {plan.angles} {dictionary.services.anglesLabel}
-                  </div>
-                  <h3>
-                    {price !== null
-                      ? formatMoney(price, currency, intlLocale)
-                      : dictionary.services.priceUnavailable}
-                  </h3>
-                  <p className="plan-description">{descriptions[plan.angles] ?? ""}</p>
-                  <PlanSelector
-                    locale={current}
-                    planId={plan.id}
-                    currency={currency}
-                    priceAvailable={price !== null}
-                    labels={{
-                      quantityLabel: dictionary.services.quantityLabel,
-                      addToCart: dictionary.cart.addToCart,
-                      addedToCart: dictionary.cart.addedToCart,
-                      viewCart: dictionary.cart.viewCart,
-                      unavailable: dictionary.services.unavailable,
-                      maxKnivesError: dictionary.cart.maxKnivesError,
-                    }}
-                  />
-                </article>
-              );
-            })}
-          </div>
-        )}
+      {/* ─── SERVICES GRID ───────────────────────────────────── */}
+      <section className="section cinematic-services-section">
+        <div className="container">
+          {loadError ? (
+            <div className="cinematic-empty-state">
+              <h2>{dictionary.services.loadError}</h2>
+            </div>
+          ) : plans.length === 0 ? (
+            <div className="cinematic-empty-state">
+              <h2>{dictionary.services.noPlans}</h2>
+            </div>
+          ) : (
+            <div className="cinematic-services-full-grid">
+              {plans.map((plan, idx) => {
+                const price = plan.prices[currency];
+                return (
+                  <article className="cinematic-service-full-card" key={plan.id}>
+                    <span className="cinematic-service-full-number">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className="cinematic-service-full-angles">
+                      {plan.angles}{" "}
+                      {plan.angles === 1
+                        ? dictionary.services.angleSingular
+                        : dictionary.services.anglePlural}
+                    </div>
+                    <h3 className="cinematic-service-full-price">
+                      {price !== null
+                        ? formatMoney(price, currency, intlLocale)
+                        : dictionary.services.priceUnavailable}
+                    </h3>
+                    <p className="cinematic-service-full-desc">
+                      {descriptions[plan.angles] ?? ""}
+                    </p>
+                    <div className="cinematic-service-full-action">
+                      <PlanSelector
+                        locale={current}
+                        planId={plan.id}
+                        currency={currency}
+                        priceAvailable={price !== null}
+                        labels={{
+                          quantityLabel: dictionary.services.quantityLabel,
+                          addToCart: dictionary.cart.addToCart,
+                          addedToCart: dictionary.cart.addedToCart,
+                          viewCart: dictionary.cart.viewCart,
+                          unavailable: dictionary.services.unavailable,
+                          maxKnivesError: dictionary.cart.maxKnivesError,
+                        }}
+                      />
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
     </main>
   );

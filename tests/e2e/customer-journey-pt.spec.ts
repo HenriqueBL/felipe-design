@@ -60,12 +60,23 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     await expect(customerPage).toHaveTitle(/Felipe Design/);
 
     // ─── STEP B: Navigate to /pt/servicos (canonical route) ───
-    await customerPage.click('a[href*="servicos"], nav >> text=/serviços/i');
+    // Viewport-aware: desktop uses nav.site-nav, mobile uses hamburger drawer
+    const mobileTrigger = customerPage.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = customerPage.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await drawer.getByRole("link", { name: /serviços/i }).click();
+    } else {
+      await customerPage.locator('nav.site-nav a[href*="servicos"], a[href*="servicos"]').first().click();
+    }
     await expect(customerPage).toHaveURL(/\/pt\/servicos/);
     await expect(customerPage.locator("h1")).toContainText(/serviços/i);
 
     // Verify plan card with BRL price
-    const planCard = customerPage.locator(".plan-card, [data-plan]").first();
+    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
+    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
     // Verify BRL currency is displayed (not USD)
@@ -73,8 +84,16 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     expect(priceText).toMatch(/R\$/);
 
     // ─── STEP C: Choose plan → navigate to /pt/finalizar (canonical checkout) ───
-    const chooseBtn = customerPage.locator('a[href*="finalizar"], button:has-text("Escolher"), a:has-text("Escolher")').first();
+    // Cinematic Services page uses "Adicionar ao carrinho" buttons inside <article> elements.
+    // Legacy used "Escolher" links. Support both for resilience.
+    const chooseBtn = customerPage.locator(
+      'button:has-text("Adicionar ao carrinho"), a[href*="finalizar"], button:has-text("Escolher"), a:has-text("Escolher")',
+    ).first();
     await chooseBtn.click();
+    // After adding to cart, navigate to checkout explicitly if not redirected
+    if (!customerPage.url().includes("/finalizar")) {
+      await customerPage.goto("/pt/finalizar");
+    }
     await expect(customerPage).toHaveURL(/\/pt\/finalizar/);
 
     // Verify checkout shows order summary in PT

@@ -158,7 +158,11 @@ export default async function CustomerOrderPage({
                 <li key={item.id} className="admin-order-item" data-testid={"order-item-" + item.item_index}>
                   <p>
                     <strong>{dictionary.dashboard.itemLabel(item.item_index)}</strong> —{" "}
-                    {item.angles} {dictionary.services.anglesLabel},{" "}
+                    {item.angles}{" "}
+                    {item.angles === 1
+                      ? dictionary.services.angleSingularPerKnife
+                      : dictionary.services.anglePluralPerKnife}
+                    ,{" "}
                     {item.knife_quantity} {item.knife_quantity === 1 ? dictionary.dashboard.knifeSingular : dictionary.dashboard.knifePlural}
                   </p>
                   <p>
@@ -194,7 +198,10 @@ export default async function CustomerOrderPage({
             <div className="row">
               <span>{dictionary.checkout.planLabel}</span>
               <span>
-                {planAngles ?? "-"} {dictionary.services.anglesLabel}
+                {planAngles ?? "-"}{" "}
+                {planAngles === 1
+                  ? dictionary.services.angleSingularPerKnife
+                  : dictionary.services.anglePluralPerKnife}
               </span>
             </div>
             <div className="row">

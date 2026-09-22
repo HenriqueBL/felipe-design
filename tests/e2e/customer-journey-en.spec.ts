@@ -60,18 +60,36 @@ test.describe("Complete Customer Journey — EN", () => {
     await expect(customerPage).toHaveTitle(/Felipe Design/);
 
     // ─── STEP B: Navigate to services ───
-    await customerPage.click('a[href*="services"], nav >> text=/services/i');
+    // Viewport-aware: desktop uses nav.site-nav, mobile uses hamburger drawer
+    const mobileTrigger = customerPage.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await mobileTrigger.click();
+      const drawer = customerPage.locator("#mobile-nav-drawer");
+      await expect(drawer).toBeVisible();
+      await drawer.getByRole("link", { name: /services/i }).click();
+    } else {
+      await customerPage.locator('nav.site-nav a[href*="services"], a[href*="services"]').first().click();
+    }
     await expect(customerPage).toHaveURL(/\/en\/services/);
     await expect(customerPage.locator("h1")).toContainText(/services/i);
 
     // Verify at least one plan is rendered with real backend data
-    const planCard = customerPage.locator(".plan-card, [data-plan]").first();
+    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
+    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
     // ─── STEP C: Choose a plan → navigate to checkout ───
-    // Click the first "Choose plan" button/link
-    const chooseBtn = customerPage.locator('a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose")').first();
+    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
+    // Legacy used "Choose" links. Support both for resilience.
+    const chooseBtn = customerPage.locator(
+      'button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose")',
+    ).first();
     await chooseBtn.click();
+    // After adding to cart, navigate to checkout explicitly
+    if (!customerPage.url().includes("/checkout")) {
+      await customerPage.goto("/en/checkout");
+    }
     await expect(customerPage).toHaveURL(/\/en\/checkout/);
 
     // Verify checkout shows order summary

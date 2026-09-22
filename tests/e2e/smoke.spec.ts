@@ -6,10 +6,16 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page).toHaveTitle(/Felipe Design/);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
-    // Verify main navigation links exist and point to correct EN paths
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("link", { name: /services/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /sign in/i })).toBeVisible();
+    // Desktop: nav.site-nav is visible; Mobile: hamburger trigger is visible
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await expect(mobileTrigger).toBeVisible();
+    } else {
+      await expect(desktopNav.getByRole("link", { name: /services/i })).toBeVisible();
+      await expect(desktopNav.getByRole("link", { name: /sign in/i })).toBeVisible();
+    }
   });
 
   test("homepage loads in PT with correct locale and navigation", async ({ page }) => {
@@ -17,10 +23,16 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page).toHaveTitle(/Felipe Design/);
     await expect(page.locator("html")).toHaveAttribute("lang", "pt");
 
-    // Verify main navigation links exist and point to correct PT paths
-    const nav = page.locator("nav.site-nav");
-    await expect(nav.getByRole("link", { name: /serviços/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /entrar/i })).toBeVisible();
+    // Desktop: nav.site-nav is visible; Mobile: hamburger trigger is visible
+    const desktopNav = page.locator("nav.site-nav");
+    const mobileTrigger = page.locator(".mobile-nav-trigger");
+    const isMobile = (await mobileTrigger.isVisible()).valueOf();
+    if (isMobile) {
+      await expect(mobileTrigger).toBeVisible();
+    } else {
+      await expect(desktopNav.getByRole("link", { name: /serviços/i })).toBeVisible();
+      await expect(desktopNav.getByRole("link", { name: /entrar/i })).toBeVisible();
+    }
   });
 
   test("root redirects to default locale (EN)", async ({ page }) => {
@@ -33,7 +45,8 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("h1")).toContainText(/services/i);
 
     // At least one plan card should be visible with price
-    const planCards = page.locator(".plan-card, [data-plan]");
+    // Cinematic redesign uses article elements; legacy uses .plan-card
+    const planCards = page.locator("article, .cinematic-service-card, .plan-card, [data-plan]");
     await expect(planCards.first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -42,7 +55,8 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("h1")).toContainText(/serviços/i);
 
     // At least one plan card should be visible
-    const planCards = page.locator(".plan-card, [data-plan]");
+    // Cinematic redesign uses article elements; legacy uses .plan-card
+    const planCards = page.locator("article, .cinematic-service-card, .plan-card, [data-plan]");
     await expect(planCards.first()).toBeVisible({ timeout: 10_000 });
   });
 

@@ -47,7 +47,11 @@ export default async function OrderDetailPage({
                 <li key={item.id} className="admin-order-item">
                   <p>
                     <strong>{dictionary.dashboard.itemLabel(item.item_index)}</strong> —{" "}
-                    {item.angles} {dictionary.services.anglesLabel},{" "}
+                    {item.angles}{" "}
+{item.angles === 1
+? dictionary.services.angleSingularPerKnife
+: dictionary.services.anglePluralPerKnife}
+,{" "}
                     {item.knife_quantity} {item.knife_quantity === 1 ? dictionary.dashboard.knifeSingular : dictionary.dashboard.knifePlural}
                   </p>
                   <p>
@@ -68,7 +72,10 @@ export default async function OrderDetailPage({
           <>
             <h2>{dictionary.dashboard.orderPlan}</h2>
             <p>
-              {planAngles ?? "-"} {dictionary.services.anglesLabel}
+              {planAngles ?? "-"}{" "}
+              {planAngles === 1
+                ? dictionary.services.angleSingularPerKnife
+                : dictionary.services.anglePluralPerKnife}
             </p>
             <h2>{dictionary.dashboard.orderQuantity}</h2>
             <p>{order.knife_quantity}</p>

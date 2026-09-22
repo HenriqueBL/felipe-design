@@ -75,8 +75,9 @@ test.describe("Mobile Responsiveness E2E", () => {
     await assertNoHorizontalOverflow(page);
 
     // Verify plan cards are accessible (not cut off)
-    const planCards = page.locator(".plan-card, [data-plan]");
-    if (await planCards.count() > 0) {
+    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
+    const planCards = page.locator(".cinematic-service-card, .plan-card, [data-plan]");
+    if ((await planCards.count()) > 0) {
       const firstCard = planCards.first();
       await expect(firstCard).toBeVisible();
 

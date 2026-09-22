@@ -56,19 +56,27 @@ export default async function AboutPage({
 
   return (
     <main>
-      <section className="page-hero">
+      {/* ─── CINEMATIC PAGE HERO ─────────────────────────────── */}
+      <section className="cinematic-page-hero">
         <div className="container">
+          <p className="section-eyebrow">
+            {locale === "pt" ? "Sobre" : "About"}
+          </p>
           <h1>{dictionary.about.title}</h1>
-          <p className="about-lede">{dictionary.about.lede}</p>
+          <p className="cinematic-page-subtitle">{dictionary.about.lede}</p>
         </div>
       </section>
-      <section className="section">
-        <div className="container about-body">
-          {dictionary.about.paragraphs.map((paragraph) => (
-            <p key={paragraph.slice(0, 32)}>{paragraph}</p>
-          ))}
-          <div className="hero-actions">
-            <Link href={galleryPath(locale)} className="btn btn-primary">
+
+      {/* ─── EDITORIAL BODY ──────────────────────────────────── */}
+      <section className="section cinematic-about-body">
+        <div className="container">
+          <div className="cinematic-about-prose">
+            {dictionary.about.paragraphs.map((paragraph) => (
+              <p key={paragraph.slice(0, 32)}>{paragraph}</p>
+            ))}
+          </div>
+          <div className="cinematic-about-cta">
+            <Link href={galleryPath(locale)} className="btn btn-primary btn-lg">
               {dictionary.about.ctaGallery}
             </Link>
           </div>
