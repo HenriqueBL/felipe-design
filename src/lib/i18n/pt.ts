@@ -69,6 +69,8 @@ const pt: Dictionary = {
   },
   services: {
     title: "Serviços",
+    angleSingular: "Ângulo",
+    anglePlural: "Ângulos",
     subtitle: "Escolha quantos ângulos você quer para cada faca. Cada plano tem preço por região e inclui tratamento profissional.",
     description1: "Um ângulo por faca — ideal para uma foto de catálogo limpa.",
     description2: "Dois ângulos por faca — mostre lâmina e cabo em detalhe.",

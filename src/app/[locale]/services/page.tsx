@@ -85,7 +85,7 @@ export default async function ServicesPage({
       <section className="cinematic-page-hero">
         <div className="container">
           <p className="section-eyebrow">
-            {current === "pt" ? "Serviços" : "Services"}
+            {dictionary.services.title}
           </p>
           <h1>{dictionary.services.title}</h1>
           <p className="cinematic-page-subtitle">
@@ -138,12 +138,8 @@ export default async function ServicesPage({
                     <div className="cinematic-service-full-angles">
                       {plan.angles}{" "}
                       {plan.angles === 1
-                        ? current === "pt"
-                          ? "Ângulo"
-                          : "Angle"
-                        : current === "pt"
-                          ? "Ângulos"
-                          : "Angles"}
+                        ? dictionary.services.angleSingular
+                        : dictionary.services.anglePlural}
                     </div>
                     <h3 className="cinematic-service-full-price">
                       {price !== null

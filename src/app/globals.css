@@ -2420,48 +2420,6 @@ textarea {
   margin-top: 8px;
 }
 
-/* ─── Mobile Navigation Drawer ─────────────────────────────── */
-.mobile-nav-drawer {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-  background: rgba(11, 10, 9, 0.97);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--transition-base), visibility var(--transition-base);
-}
-
-.mobile-nav-drawer.open {
-  opacity: 1;
-  visibility: visible;
-}
-
-.mobile-nav-drawer a,
-.mobile-nav-drawer button.linklike {
-  font-family: var(--font-serif);
-  font-size: 1.8rem;
-  color: var(--muted);
-  text-decoration: none;
-  letter-spacing: 0.02em;
-  transition: color var(--transition-base);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 0;
-}
-
-.mobile-nav-drawer a:hover,
-.mobile-nav-drawer button.linklike:hover {
-  color: var(--accent);
-}
-
 /* Mobile nav backdrop */
 .mobile-nav-backdrop {
   position: fixed;
@@ -2487,6 +2445,61 @@ textarea {
 
 .mobile-nav-drawer.open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Ensure closed drawer is not tabbable */
+.mobile-nav-drawer:not(.open) {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mobile-nav-drawer:not(.open) a,
+.mobile-nav-drawer:not(.open) button {
+  visibility: hidden;
+}
+
+/* Mobile nav links layout */
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+  width: 100%;
+}
+.mobile-nav-links a,
+.mobile-nav-links .cart-badge,
+.mobile-nav-links .auth-link {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color var(--transition-base);
+  padding: 4px 0;
+  width: 100%;
+}
+.mobile-nav-links a:hover,
+.mobile-nav-links .cart-badge:hover,
+.mobile-nav-links .auth-link:hover {
+  color: var(--accent);
+}
+.mobile-nav-links .cart-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-nav-links .cart-badge-count {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 50%;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-nav-close {

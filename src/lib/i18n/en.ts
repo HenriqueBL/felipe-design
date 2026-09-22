@@ -67,6 +67,8 @@ const en = {
   },
   services: {
     title: "Services",
+    angleSingular: "Angle",
+    anglePlural: "Angles",
     subtitle: "Choose how many angles you want for each knife. Each plan is priced per region and includes professional retouching.",
     description1: "One polished angle per knife — perfect for a clean catalog shot.",
     description2: "Two angles per knife — show the blade and the handle in detail.",
