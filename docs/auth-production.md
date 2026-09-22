@@ -26,8 +26,9 @@ In the Supabase Dashboard → Authentication → URL Configuration:
 | Site URL               | `http://localhost:3000`                 | `https://felipesilvadesign.com`           |
 | Redirect URLs (allow)  | `http://localhost:3000/auth/callback` | `https://felipesilvadesign.com/auth/callback` |
 
-Add both `/en` and `/pt` variants if you want locale-specific landing
-pages after sign-in; the callback route handles them via `?next=`.
+Locale is preserved via the secure `?next=` query parameter (e.g. `?next=/pt/conta`).
+Do NOT add separate `/en/auth/callback` or `/pt/auth/callback` redirect URLs — only the single
+`/auth/callback` path is needed. The callback route derives the locale from the `next` parameter.
 
 > ⚠️ Never add wildcard external domains to the redirect allowlist.
 > The application rejects unsafe `next` values server-side
@@ -49,7 +50,7 @@ SMTP provider.
 | SMTP host         | Your provider's SMTP hostname                    | `smtp.resend.com`             |
 | SMTP port         | Usually 587 (TLS) or 465 (SSL)                   | `587`                         |
 | Username          | SMTP username / API key identifier                | `resend`                      |
-| Password          | SMTP password / API key (**secret**)              | *(stored in env/vault)*       |
+| Password          | SMTP password / API key (**secret**)              | *(configured in Supabase Dashboard; never stored in app `.env`)* |
 | Enable TLS        | Required for port 587                            | ✅                            |
 
 ### Environment variables (application side)

@@ -44,9 +44,5 @@
     "supabase": "^2.117.0",
     "typescript": "^5.7.2",
     "vitest": "^3.0.0"
-  },
-  "allowScripts": {
-    "esbuild@0.28.2": true,
-    "unrs-resolver@1.12.2": true
   }
 }
