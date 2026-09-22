@@ -2035,9 +2035,14 @@ textarea {
 
 /* ─── Cinematic Cart ───────────────────────────────────────── */
 .cart-main {
-  padding: 140px 0 100px;
+  padding: 140px 24px 100px;
   background: var(--bg);
   min-height: 80vh;
+}
+.cart-page {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
 }
 .cart-page h1 {
   font-size: clamp(2rem, 4vw, 3rem);
@@ -2182,7 +2187,7 @@ textarea {
 }
 @media (max-width: 768px) {
   .cart-main {
-    padding: 100px 0 60px;
+    padding: 100px 16px 60px;
   }
   .cart-item {
     padding: 24px 20px;
@@ -2639,7 +2644,7 @@ textarea {
 
 .footer-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 0.8fr;
+  grid-template-columns: minmax(0, 1.6fr) minmax(180px, 0.8fr);
   gap: 48px;
   padding-bottom: 48px;
 }
@@ -2658,15 +2663,13 @@ textarea {
   color: var(--muted);
 }
 
-.footer-nav,
-.footer-locale {
+.footer-nav {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.footer-nav h3,
-.footer-locale h3 {
+.footer-nav h3 {
   font-family: var(--font-sans);
   font-size: 0.72rem;
   text-transform: uppercase;
