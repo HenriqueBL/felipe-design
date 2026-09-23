@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
-import { navigateCartCheckoutFlow, getFirstPlanId } from "./helpers/checkout";
+import { navigateCartCheckoutFlow } from "./helpers/checkout";
 
 const FIXTURE_IMAGE = path.resolve(__dirname, "fixtures/tiny.jpg");
 

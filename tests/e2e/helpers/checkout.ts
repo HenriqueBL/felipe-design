@@ -89,9 +89,10 @@ export async function addFirstPlanToCartViaUI(
     .getByRole("button", { name: /add to cart|adicionar ao carrinho/i });
   await expect(addToCartBtn).toBeVisible({ timeout: 10_000 });
   await addToCartBtn.click();
-  // Wait for confirmation note to appear
+  // Confirm add-to-cart succeeded by waiting for the semantic "View cart" link
+  // that appears only after a successful add. No visual CSS selectors needed.
   await expect(
-    page.locator(".plan-added-note, [class*='added']"),
+    page.getByRole("link", { name: /view cart|ver carrinho/i }),
   ).toBeVisible({ timeout: 5_000 });
 }
 

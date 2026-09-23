@@ -76,10 +76,12 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
 
     // Verify checkout shows 2 items with prices
-    const checkoutItems = page.locator('.cart-item, [data-cart-item], li[class*="item"]');
+    // Cart checkout renders items as ul.cart-items > li.cart-item (functional class, not visual)
+    const checkoutItems = page.locator("ul.cart-items > li.cart-item");
     await expect(checkoutItems).toHaveCount(2, { timeout: 10_000 });
 
     // ─── DELIVERY ESTIMATE ASSERTIONS ───
+    // Delivery estimate panel uses .estimate-panel class (functional, not visual)
     const estimatePanel = page.locator(".estimate-panel");
     await expect(estimatePanel).toBeVisible({ timeout: 10_000 });
     const estimateText = await estimatePanel.textContent();
