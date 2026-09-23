@@ -24,15 +24,20 @@ test.describe("Error States & Edge Cases E2E", () => {
 
     await authenticateWithSSR(page, customer.email, customer.password);
     await page.goto("/en/services");
-    const chooseBtn = page.locator('a[href*="checkout"], button:has-text("Choose")').first();
-    await chooseBtn.click();
-    await page.waitForURL(/\/en\/checkout/, { timeout: 10000 });
+    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
+    // Extract plan ID from the services page's first qty input for single-item checkout.
+    const qtyInput = page.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const { randomUUID } = await import("node:crypto");
+    await page.goto(`/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/, { timeout: 10000 });
 
     // Scope to main: the header now renders a Sign out <button type="submit">,
     // which a generic `button[type="submit"]` matcher would click instead.
     const createBtn = page
       .locator("main")
-      .getByRole("button", { name: /create order|finalize|finalizar/i });
+      .getByRole("button", { name: /create order/i });
     await createBtn.click();
     await page.waitForURL(/\/en\/account\/orders\//, { timeout: 15000 });
     orderId = page.url().match(/orders\/([0-9a-f-]+)/)?.[1] ?? "";

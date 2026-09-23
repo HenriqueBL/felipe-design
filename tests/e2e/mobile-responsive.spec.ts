@@ -23,9 +23,14 @@ test.describe("Mobile Responsiveness E2E", () => {
 
     await authenticateWithSSR(page, customer.email, customer.password);
     await page.goto("/en/services");
-    const chooseBtn = page.locator('a[href*="checkout"], button:has-text("Choose")').first();
-    await chooseBtn.click();
-    await page.waitForURL(/\/en\/checkout/, { timeout: 10000 });
+    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
+    // Extract plan ID from the services page's first qty input for single-item checkout.
+    const qtyInput = page.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const { randomUUID } = await import("node:crypto");
+    await page.goto(`/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/, { timeout: 10000 });
 
     // Scope to main: the header now renders a Sign out <button type="submit">.
     const createBtn = page.locator("main").getByRole("button", { name: /create order/i });
@@ -75,8 +80,8 @@ test.describe("Mobile Responsiveness E2E", () => {
     await assertNoHorizontalOverflow(page);
 
     // Verify plan cards are accessible (not cut off)
-    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
-    const planCards = page.locator(".cinematic-service-card, .plan-card, [data-plan]");
+    // Cinematic redesign uses article.cinematic-service-full-card
+    const planCards = page.locator("article.cinematic-service-full-card");
     if ((await planCards.count()) > 0) {
       const firstCard = planCards.first();
       await expect(firstCard).toBeVisible();

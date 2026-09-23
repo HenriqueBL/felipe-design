@@ -111,16 +111,17 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
   test("EN: after sign out, checkout shows the magic link form again (no reload)", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
 
+    // Use single-item checkout (not cart) because only single-item renders
+    // input[type="email"] for unauthenticated users; cart checkout renders a Link.
+    // Extract plan ID from the services page's first qty input.
     await page.goto("/en/services");
-    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
-    const chooseBtn = page
-      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
-      .first();
-    await chooseBtn.click();
-    if (!page.url().includes("/checkout")) {
-      await page.goto("/en/checkout");
-    }
-    await expect(page).toHaveURL(/\/en\/checkout/);
+    const qtyInput = page.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const checkoutUrl = `/en/checkout?plan=${planId}&qty=1&currency=USD&key=${crypto.randomUUID()}`;
+
+    await page.goto(checkoutUrl);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
 
     // Authenticated: no email form yet.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
@@ -129,15 +130,8 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
     await clickSignOut(page);
     await expect(page).toHaveURL(/\/en$/, { timeout: 10_000 });
 
-    await page.goto("/en/services");
-    const chooseBtn2 = page
-      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
-      .first();
-    await chooseBtn2.click();
-    if (!page.url().includes("/checkout")) {
-      await page.goto("/en/checkout");
-    }
-    await expect(page).toHaveURL(/\/en\/checkout/);
+    await page.goto(checkoutUrl);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 

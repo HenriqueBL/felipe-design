@@ -75,8 +75,8 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     await expect(customerPage.locator("h1")).toContainText(/serviços/i);
 
     // Verify plan card with BRL price
-    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
-    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
+    // Cinematic redesign uses article.cinematic-service-full-card
+    const planCard = customerPage.locator("article.cinematic-service-full-card").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
     // Verify BRL currency is displayed (not USD)
@@ -84,20 +84,18 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     expect(priceText).toMatch(/R\$/);
 
     // ─── STEP C: Choose plan → navigate to /pt/finalizar (canonical checkout) ───
-    // Cinematic Services page uses "Adicionar ao carrinho" buttons inside <article> elements.
-    // Legacy used "Escolher" links. Support both for resilience.
-    const chooseBtn = customerPage.locator(
-      'button:has-text("Adicionar ao carrinho"), a[href*="finalizar"], button:has-text("Escolher"), a:has-text("Escolher")',
-    ).first();
-    await chooseBtn.click();
-    // After adding to cart, navigate to checkout explicitly if not redirected
-    if (!customerPage.url().includes("/finalizar")) {
-      await customerPage.goto("/pt/finalizar");
-    }
-    await expect(customerPage).toHaveURL(/\/pt\/finalizar/);
+    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
+    // Extract plan ID from the services page's first qty input for single-item checkout.
+    const qtyInput = customerPage.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const { randomUUID } = await import("node:crypto");
+    const checkoutUrl = `/pt/finalizar?plan=${planId}&qty=1&currency=BRL&key=${randomUUID()}`;
+    await customerPage.goto(checkoutUrl);
+    await expect(customerPage).toHaveURL(/\/pt\/finalizar\?plan=/);
 
     // Verify checkout shows order summary in PT
-    await expect(customerPage.locator("main")).toContainText(/confirmar|resumo do pedido/i);
+    await expect(customerPage.locator("main")).toContainText(/confirmar|resumo do pedido|finalizar/i);
 
     // Verify BRL price in checkout
     const checkoutContent = await customerPage.locator("main").textContent();

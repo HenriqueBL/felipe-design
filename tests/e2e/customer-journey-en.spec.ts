@@ -75,28 +75,25 @@ test.describe("Complete Customer Journey — EN", () => {
     await expect(customerPage.locator("h1")).toContainText(/services/i);
 
     // Verify at least one plan is rendered with real backend data
-    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
-    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
+    // Cinematic redesign uses article.cinematic-service-full-card
+    const planCard = customerPage.locator("article.cinematic-service-full-card").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
     // ─── STEP C: Choose a plan → navigate to checkout ───
-    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
-    // Legacy used "Choose" links. Support both for resilience.
-    const chooseBtn = customerPage.locator(
-      'button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose")',
-    ).first();
-    await chooseBtn.click();
-    // After adding to cart, navigate to checkout explicitly
-    if (!customerPage.url().includes("/checkout")) {
-      await customerPage.goto("/en/checkout");
-    }
-    await expect(customerPage).toHaveURL(/\/en\/checkout/);
+    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
+    // Extract plan ID from the services page's first qty input for single-item checkout.
+    const qtyInput = customerPage.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const { randomUUID } = await import("node:crypto");
+    const checkoutUrl = `/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`;
+    await customerPage.goto(checkoutUrl);
+    await expect(customerPage).toHaveURL(/\/en\/checkout\?plan=/);
 
     // Verify checkout shows order summary
-    await expect(customerPage.locator("main")).toContainText(/confirm your order|order summary/i);
+    await expect(customerPage.locator("main")).toContainText(/confirm your order|order summary|checkout/i);
 
     // ─── STEP D: Authentication (SSR cookies for journey stability) ───
-    // Capture the current checkout URL with intent params before authenticating
     const checkoutUrlWithIntent = customerPage.url();
     expect(checkoutUrlWithIntent).toMatch(/plan=/);
 

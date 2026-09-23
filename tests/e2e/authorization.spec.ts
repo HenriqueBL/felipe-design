@@ -41,17 +41,17 @@ test.describe("Authorization & Access Control E2E", () => {
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/account/, { timeout: 10000 });
 
-    // Now navigate to services and choose plan — session persists across navigations
+    // Now navigate to services and extract plan ID for single-item checkout.
+    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
     await page.goto("/en/services");
     await expect(page.locator("h1")).toContainText(/services/i, { timeout: 10000 });
 
-    const chooseBtn = page.locator('a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose"), a:has-text("Select")').first();
-    await expect(chooseBtn).toBeVisible({ timeout: 10000 });
-    await chooseBtn.click();
-
-    // Checkout should now render in authenticated state directly
-    await expect(page).toHaveURL(/\/en\/checkout/, { timeout: 10000 });
-    await page.waitForLoadState("networkidle");
+    const qtyInput = page.locator('input[id^="qty-"]').first();
+    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
+    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
+    const { randomUUID } = await import("node:crypto");
+    await page.goto(`/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/, { timeout: 10000 });
 
     // Scope to main: the header now renders a Sign out <button type="submit">,
     // which a generic `button[type="submit"]` matcher would click instead.
