@@ -84,11 +84,61 @@ corretamente).
    `scripts/deploy-production.sh <sha>` — builda `felipe-design:<sha>`,
    valida env, sobe o compose.
 7. **Health**: script aguarda `/api/health/live`; aborta com logs se falhar.
-8. **Smoke local**: `curl http://127.0.0.1:3000/` (en + pt), `/en/services`,
-   `/api/health/live`.
+8. **Smoke tests (obrigatório)**: `scripts/deploy-production.sh` executa
+   automaticamente smoke tests em todas as rotas públicas críticas após o
+   health check passar. O deploy **NUNCA** é considerado concluído se
+   qualquer smoke test falhar — o script termina com exit code != 0 e
+   imprime `FINAL: FAILED` no relatório. Ver seção "Smoke Tests" abaixo
+   para detalhes de rotas, códigos esperados e comportamento de falha.
 9. **Proxy switch**: aponte o vhost do nginx para `127.0.0.1:3000` (ou
    porta escolhida) e recarregue — config real fora do escopo desta branch.
 10. **Smoke público**: mesmo set de URLs via `https://<dominio>`.
+
+## Smoke Tests
+
+O script `scripts/deploy-production.sh` executa automaticamente smoke tests
+após o health check (`/api/health/live`) retornar 200. Os smoke tests são
+**obrigatórios** e **bloqueantes**: se qualquer rota falhar, o script termina
+com exit code != 0 e imprime `FINAL: FAILED` no relatório final.
+
+### Rotas verificadas
+
+| Rota                  | Código esperado | Notas                              |
+|-----------------------|-----------------|------------------------------------|
+| `/`                   | 200             | Redirect para `/en/` é aceito      |
+| `/en/`                | 200             | Homepage EN                        |
+| `/pt/`                | 200             | Homepage PT                        |
+| `/en/services`        | 200             | Página de serviços EN              |
+| `/pt/servicos`        | 200             | Página de serviços PT              |
+| `/en/cart`            | 200             | Carrinho EN (regressão SMOKE_FAIL) |
+| `/pt/carrinho`        | 200             | Carrinho PT                        |
+| `/api/health/live`    | 200             | Health check (já verificado antes) |
+
+### Comportamento de falha
+
+- Qualquer código fora do esperado (404, 500, redirect inesperado) marca a
+  rota como `SMOKE_FAIL`.
+- Uma ou mais falhas → `SMOKE: FAIL` + `FINAL: FAILED` no relatório.
+- O script **nunca** imprime `FINAL: SUCCESS` se houver falha em qualquer
+  gate obrigatório (BUILD, ENV, DEPLOY, HEALTH ou SMOKE).
+- Exit code != 0 impede que pipelines ou automações considerem o deploy
+  concluído com sucesso.
+
+### Diferença entre Health Check e Smoke Tests
+
+- **Health check** (`/api/health/live`): verifica se o processo está vivo e
+  respondendo. É condição necessária mas não suficiente.
+- **Smoke tests**: verificam se as rotas públicas críticas estão servindo
+  conteúdo correto. Um app pode estar "vivo" mas com rotas quebradas
+  (ex.: cart 404 por build incorreto).
+
+### Política de rollback
+
+- **App rollback**: reverter container/tag Docker. Migrations já aplicadas
+  **não** são revertidas automaticamente.
+- **DB rollback**: usar backup pré-migration preservado em
+  `/opt/felipedesign-backups/`. Migrations são forward-only; restore de
+  backup é operação manual e documentada separadamente.
 11. **Monitor**: `docker compose -f docker-compose.prod.yml logs -f app`
     por alguns minutos; observe healthchecks.
 12. **Rollback** se necessário (abaixo).
