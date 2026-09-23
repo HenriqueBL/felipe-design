@@ -13,6 +13,15 @@ import { randomUUID } from "node:crypto";
 
 import type { Currency } from "@/types/database";
 
+/**
+ * Return the real public services route for each locale.
+ * EN uses /en/services; PT uses the semantic rewrite /pt/servicos.
+ * Customer journey specs MUST use this to test the actual user-facing URL.
+ */
+function servicesRoute(locale: "en" | "pt"): string {
+  return locale === "en" ? "/en/services" : "/pt/servicos";
+}
+
 export interface SingleItemCheckoutParams {
   planId: string;
   quantity?: number;
@@ -62,7 +71,7 @@ export async function navigateToSingleItemCheckout(
   locale: "en" | "pt" = "en",
   overrides?: Partial<SingleItemCheckoutParams>,
 ): Promise<string> {
-  await page.goto(`/${locale}/services`);
+  await page.goto(servicesRoute(locale));
   const planId = await getFirstPlanId(page);
   const url = buildSingleItemCheckoutUrl(locale, {
     planId,
@@ -82,7 +91,7 @@ export async function addFirstPlanToCartViaUI(
   page: Page,
   locale: "en" | "pt" = "en",
 ): Promise<void> {
-  await page.goto(`/${locale}/services`);
+  await page.goto(servicesRoute(locale));
   const addToCartBtn = page
     .locator("article[data-plan-id]")
     .first()
