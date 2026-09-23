@@ -5,11 +5,19 @@ export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }
 
-export function publicPath(locale: Locale, page: "home" | "services"): string {
-  if (page === "home") {
-    return `/${locale}`;
+export type PublicPage = "home" | "services" | "about" | "gallery";
+
+export function publicPath(locale: Locale, page: PublicPage): string {
+  switch (page) {
+    case "home":
+      return `/${locale}`;
+    case "services":
+      return locale === defaultLocale ? "/en/services" : "/pt/servicos";
+    case "about":
+      return locale === defaultLocale ? "/en/about" : "/pt/sobre";
+    case "gallery":
+      return locale === defaultLocale ? "/en/gallery" : "/pt/galeria";
   }
-  return locale === defaultLocale ? `/${locale}/services` : `/${locale}/servicos`;
 }
 
 export function siteName(): string {

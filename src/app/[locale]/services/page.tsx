@@ -30,9 +30,9 @@ export async function generateMetadata({
     alternates: {
       canonical,
       languages: {
-        en: base + "/en/services",
-        pt: base + "/pt/servicos",
-        "x-default": base + "/en/services",
+        en: base + publicPath("en", "services"),
+        pt: base + publicPath("pt", "services"),
+        "x-default": base + publicPath("en", "services"),
       },
     },
     openGraph: {
@@ -103,6 +103,7 @@ export default async function ServicesPage({
                   key={option}
                   href={servicesPath(current, option)}
                   className={option === currency ? "active" : ""}
+                  aria-current={option === currency ? "page" : undefined}
                 >
                   {option}
                 </Link>
