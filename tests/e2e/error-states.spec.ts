@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 // Create a small invalid file (text file pretending to be image)
 const INVALID_FILE_CONTENT = Buffer.from("This is not an image", "utf-8");
@@ -23,15 +24,8 @@ test.describe("Error States & Edge Cases E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
-    await page.goto("/en/services");
-    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
-    // Extract plan ID from the services page's first qty input for single-item checkout.
-    const qtyInput = page.locator('input[id^="qty-"]').first();
-    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
-    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
-    const { randomUUID } = await import("node:crypto");
-    await page.goto(`/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
-    await expect(page).toHaveURL(/\/en\/checkout\?plan=/, { timeout: 10000 });
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Scope to main: the header now renders a Sign out <button type="submit">,
     // which a generic `button[type="submit"]` matcher would click instead.

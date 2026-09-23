@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
@@ -22,15 +23,8 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
-    await page.goto("/en/services");
-    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
-    // Extract plan ID from the services page's first qty input for single-item checkout.
-    const qtyInput = page.locator('input[id^="qty-"]').first();
-    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
-    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
-    const { randomUUID } = await import("node:crypto");
-    await page.goto(`/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
-    await expect(page).toHaveURL(/\/en\/checkout\?plan=/, { timeout: 10000 });
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Scope to main: the header now renders a Sign out <button type="submit">.
     const createBtn = page.locator("main").getByRole("button", { name: /create order/i });
@@ -80,8 +74,8 @@ test.describe("Mobile Responsiveness E2E", () => {
     await assertNoHorizontalOverflow(page);
 
     // Verify plan cards are accessible (not cut off)
-    // Cinematic redesign uses article.cinematic-service-full-card
-    const planCards = page.locator("article.cinematic-service-full-card");
+    // Semantic selector: article with data-plan-id attribute
+    const planCards = page.locator("article[data-plan-id]");
     if ((await planCards.count()) > 0) {
       const firstCard = planCards.first();
       await expect(firstCard).toBeVisible();

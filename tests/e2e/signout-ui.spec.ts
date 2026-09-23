@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 /**
  * Regression: signing out must update the UI immediately, without a manual
@@ -113,18 +114,13 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
 
     // Use single-item checkout (not cart) because only single-item renders
     // input[type="email"] for unauthenticated users; cart checkout renders a Link.
-    // Extract plan ID from the services page's first qty input.
-    await page.goto("/en/services");
-    const qtyInput = page.locator('input[id^="qty-"]').first();
-    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
-    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
-    const checkoutUrl = `/en/checkout?plan=${planId}&qty=1&currency=USD&key=${crypto.randomUUID()}`;
-
-    await page.goto(checkoutUrl);
-    await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
+    await navigateToSingleItemCheckout(page, "en");
 
     // Authenticated: no email form yet.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
+
+    // Capture checkout URL for re-navigation after sign-out
+    const checkoutUrl = page.url();
 
     // Sign out from the header, then re-enter checkout — no reload.
     await clickSignOut(page);

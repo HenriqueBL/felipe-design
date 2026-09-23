@@ -132,7 +132,7 @@ export default async function ServicesPage({
               {plans.map((plan, idx) => {
                 const price = plan.prices[currency];
                 return (
-                  <article className="cinematic-service-full-card" key={plan.id}>
+                  <article className="cinematic-service-full-card" data-plan-id={plan.id} key={plan.id}>
                     <span className="cinematic-service-full-number">
                       {String(idx + 1).padStart(2, "0")}
                     </span>

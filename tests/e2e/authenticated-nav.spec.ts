@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 /**
  * Regression: the site header must reflect the real Supabase session.
@@ -105,17 +106,8 @@ test.describe("Authenticated navigation reflects session", () => {
   test("authenticated checkout renders create-order step, not magic link form", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
 
-    // Cinematic redesign: checkout requires ?plan=...&qty=...&currency=...&key=...
-    // Extract plan ID from the services page's first qty input for single-item checkout.
-    await page.goto("/en/services");
-    const qtyInput = page.locator('input[id^="qty-"]').first();
-    await expect(qtyInput).toBeVisible({ timeout: 10_000 });
-    const planId = (await qtyInput.getAttribute("id"))!.replace("qty-", "");
-    const { randomUUID } = await import("node:crypto");
-    const checkoutUrl = `/en/checkout?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`;
-
-    await page.goto(checkoutUrl);
-    await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Authenticated visitors must land directly on the order step.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
