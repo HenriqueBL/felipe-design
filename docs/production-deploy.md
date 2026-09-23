@@ -105,7 +105,7 @@ com exit code != 0 e imprime `FINAL: FAILED` no relatório final.
 
 | Rota                  | Código esperado | Notas                              |
 |-----------------------|-----------------|------------------------------------|
-| `/`                   | 200             | Redirect para `/en/` é aceito      |
+| `/`                   | 307 ou 308      | Redirect de locale esperado        |
 | `/en/`                | 200             | Homepage EN                        |
 | `/pt/`                | 200             | Homepage PT                        |
 | `/en/services`        | 200             | Página de serviços EN              |

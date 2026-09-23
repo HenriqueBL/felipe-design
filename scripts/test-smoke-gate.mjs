@@ -3,13 +3,13 @@
  * Testes automatizados para a lógica do smoke gate em deploy-production.sh.
  *
  * Este script é auto-contido: cria um mock HTTP server em Node.js, extrai
- * a função smoke_check do deploy script, e valida cada cenário de teste
- * sem depender de nc/socat ou gerenciamento de processos via shell.
+ * as funções smoke_check e print_report do deploy script, e valida cada
+ * cenário de teste sem depender de nc/socat ou gerenciamento de processos
+ * via shell.
  *
  * Uso: node scripts/test-smoke-gate.mjs
  * Exit 0 se todos os testes passarem, 1 caso contrário.
  */
-
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -42,22 +42,20 @@ function fail(name, reason) {
   console.log(`  ❌ FAIL: ${name} — ${reason}`);
 }
 
-// ── Extract smoke_check function from deploy script ───────────────────
-function extractSmokeCheckFunction() {
-  const content = readFileSync(DEPLOY_SCRIPT, "utf-8");
+// ── Extract a bash function from deploy script by name ────────────────
+function extractBashFunction(content, funcName) {
   const lines = content.split("\n");
   let found = false;
   let braceDepth = 0;
   let started = false;
   const funcLines = [];
-
+  const pattern = new RegExp(`^${funcName}\\(\\)`);
   for (const line of lines) {
-    if (!found && /^smoke_check\(\)/.test(line)) {
+    if (!found && pattern.test(line)) {
       found = true;
     }
     if (found) {
       funcLines.push(line);
-      // Count braces to find function end
       for (const ch of line) {
         if (ch === "{") {
           braceDepth++;
@@ -71,19 +69,28 @@ function extractSmokeCheckFunction() {
       }
     }
   }
-
   if (funcLines.length === 0) {
-    throw new Error("Could not extract smoke_check() function from deploy script");
+    throw new Error(`Could not extract ${funcName}() function from deploy script`);
   }
-
   return funcLines.join("\n");
 }
 
-// ── Generate a runner script with mock BASE_URL ───────────────────────
-function generateRunnerScript(baseUrl, smokeFuncSource) {
+// ── Generate a runner script with mock BASE_URL and full report logic ─
+function generateRunnerScript(baseUrl, smokeFuncSource, printReportSource) {
   return `#!/usr/bin/env bash
 set -euo pipefail
 SMOKE_FAILURES=0
+
+# Gate tracking variables (pre-set to PASS for non-smoke gates since
+# we are only testing the smoke + report logic in isolation)
+BUILD_STATUS="PASS"
+ENV_STATUS="PASS"
+DEPLOY_STATUS="PASS"
+HEALTH_STATUS="PASS"
+SMOKE_STATUS="NOT_RUN"
+
+${printReportSource}
+trap print_report EXIT
 
 ${smokeFuncSource}
 
@@ -112,9 +119,11 @@ smoke_check "SITEMAP" "/sitemap.xml" 200
 smoke_check "ROBOTS" "/robots.txt" 200
 
 if [[ "$SMOKE_FAILURES" -ne 0 ]]; then
+  SMOKE_STATUS="FAIL"
   echo "PUBLIC_SMOKE: FAIL ($SMOKE_FAILURES route(s) failed)"
   exit 1
 fi
+SMOKE_STATUS="PASS"
 echo "PUBLIC_SMOKE: PASS (all routes OK)"
 exit 0
 `.replace(/\$\{BASE_URL\}/g, baseUrl).replace(/\$BASE_URL/g, baseUrl);
@@ -164,23 +173,18 @@ function runBashScript(scriptContent) {
   return new Promise((resolve) => {
     const tmpFile = join(tmpdir(), `smoke-test-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`);
     writeFileSync(tmpFile, scriptContent, { mode: 0o755 });
-
     const proc = spawn("bash", [tmpFile], {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 30000,
     });
-
     let stdout = "";
     let stderr = "";
-
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
-
     proc.on("close", (code) => {
       try { unlinkSync(tmpFile); } catch {}
       resolve({ exitCode: code ?? 1, stdout, stderr });
     });
-
     proc.on("error", (err) => {
       try { unlinkSync(tmpFile); } catch {}
       resolve({ exitCode: 1, stdout, stderr: err.message });
@@ -190,16 +194,17 @@ function runBashScript(scriptContent) {
 
 // ── Tests ─────────────────────────────────────────────────────────────
 async function runTests() {
-  const smokeFuncSource = extractSmokeCheckFunction();
+  const deployContent = readFileSync(DEPLOY_SCRIPT, "utf-8");
+  const smokeFuncSource = extractBashFunction(deployContent, "smoke_check");
+  const printReportSource = extractBashFunction(deployContent, "print_report");
 
   // Test A: 200 => PASS
   console.log("\n── Test A: 200 should PASS ──");
   {
     const { server, port } = await createMockServer("uniform", 200);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { stdout } = await runBashScript(script);
     await closeServer(server);
-
     if (stdout.includes("SMOKE_PASS") && !stdout.includes("SMOKE_FAIL")) {
       pass("200 => PASS");
     } else {
@@ -213,10 +218,9 @@ async function runTests() {
   console.log("\n── Test B: expected redirect (307) on root => PASS ──");
   {
     const { server, port } = await createMockServer("uniform", 307);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { stdout } = await runBashScript(script);
     await closeServer(server);
-
     if (/SMOKE_PASS.*ROOT/.test(stdout)) {
       pass("Expected redirect (307) => PASS");
     } else {
@@ -228,10 +232,9 @@ async function runTests() {
   console.log("\n── Test C: 404 should FAIL ──");
   {
     const { server, port } = await createMockServer("uniform", 404);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { stdout } = await runBashScript(script);
     await closeServer(server);
-
     if (stdout.includes("SMOKE_FAIL")) {
       pass("404 => FAIL");
     } else {
@@ -243,10 +246,9 @@ async function runTests() {
   console.log("\n── Test D: 500 should FAIL ──");
   {
     const { server, port } = await createMockServer("uniform", 500);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { stdout } = await runBashScript(script);
     await closeServer(server);
-
     if (stdout.includes("SMOKE_FAIL")) {
       pass("500 => FAIL");
     } else {
@@ -258,10 +260,9 @@ async function runTests() {
   console.log("\n── Test E: unexpected redirect (301 on /en/services) => FAIL ──");
   {
     const { server, port } = await createMockServer("uniform", 301);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { stdout } = await runBashScript(script);
     await closeServer(server);
-
     if (/SMOKE_FAIL.*SERVICES_EN/.test(stdout)) {
       pass("Unexpected redirect (301) => FAIL");
     } else {
@@ -273,10 +274,9 @@ async function runTests() {
   console.log("\n── Test F: one failure among many routes => exit != 0 ──");
   {
     const { server, port } = await createMockServer("cart-fail", 200);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { exitCode } = await runBashScript(script);
     await closeServer(server);
-
     if (exitCode !== 0) {
       pass(`Multi-route failure => exit != 0 (exit=${exitCode})`);
     } else {
@@ -288,10 +288,9 @@ async function runTests() {
   console.log("\n── Test G: all routes pass => exit = 0 ──");
   {
     const { server, port } = await createMockServer("uniform", 200);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { exitCode } = await runBashScript(script);
     await closeServer(server);
-
     if (exitCode === 0) {
       pass("All routes pass => exit = 0");
     } else {
@@ -299,35 +298,50 @@ async function runTests() {
     }
   }
 
-  // Test H: SMOKE_FAIL must never coexist with FINAL: SUCCESS
-  console.log("\n── Test H: SMOKE_FAIL must never coexist with FINAL: SUCCESS ──");
+  // Test H: SMOKE_FAIL => FINAL: FAILED + exit != 0 (exercises print_report)
+  console.log("\n── Test H: SMOKE_FAIL => FINAL: FAILED + exit != 0 ──");
   {
-    const { server, port } = await createMockServer("uniform", 404);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
-    const { stdout } = await runBashScript(script);
+    const { server, port } = await createMockServer("cart-fail", 200);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
+    const { exitCode, stdout } = await runBashScript(script);
     await closeServer(server);
-
-    const hasFail = (stdout.match(/SMOKE_FAIL/g) || []).length > 0;
-    const hasSuccessFinal = (stdout.match(/FINAL: SUCCESS/g) || []).length > 0;
-
-    if (hasFail && !hasSuccessFinal) {
-      pass("SMOKE_FAIL never coexists with FINAL: SUCCESS");
-    } else if (!hasFail) {
-      pass("SMOKE_FAIL never coexists with FINAL: SUCCESS (no failures detected by mock)");
+    const hasSmokeFail = stdout.includes("SMOKE_FAIL");
+    const hasSmokeStatusFail = /SMOKE:\s+FAIL/.test(stdout);
+    const hasFinalFailed = /FINAL:\s+FAILED/.test(stdout);
+    const hasFinalSuccess = /FINAL:\s+SUCCESS/.test(stdout);
+    if (hasSmokeFail && hasSmokeStatusFail && hasFinalFailed && !hasFinalSuccess && exitCode !== 0) {
+      pass("SMOKE_FAIL => FINAL: FAILED + exit != 0");
     } else {
-      fail("SMOKE_FAIL never coexists with FINAL: SUCCESS",
-        `Both SMOKE_FAIL and FINAL: SUCCESS found in output`);
+      fail("SMOKE_FAIL => FINAL: FAILED + exit != 0",
+        `smoke_fail=${hasSmokeFail}, smoke_status_fail=${hasSmokeStatusFail}, final_failed=${hasFinalFailed}, final_success=${hasFinalSuccess}, exit=${exitCode}`);
     }
   }
 
-  // Test I: CART regression specific
-  console.log("\n── Test I: /en/cart 404 must cause FAIL (regression) ──");
+  // Test I: success path => FINAL: SUCCESS + exit = 0 (exercises print_report)
+  console.log("\n── Test I: success path => FINAL: SUCCESS + exit = 0 ──");
   {
-    const { server, port } = await createMockServer("cart-fail", 200);
-    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource);
+    const { server, port } = await createMockServer("uniform", 200);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
     const { exitCode, stdout } = await runBashScript(script);
     await closeServer(server);
+    const hasSmokePass = /SMOKE:\s+PASS/.test(stdout);
+    const hasFinalSuccess = /FINAL:\s+SUCCESS/.test(stdout);
+    const hasFinalFailed = /FINAL:\s+FAILED/.test(stdout);
+    if (hasSmokePass && hasFinalSuccess && !hasFinalFailed && exitCode === 0) {
+      pass("Success path => FINAL: SUCCESS + exit = 0");
+    } else {
+      fail("Success path => FINAL: SUCCESS + exit = 0",
+        `smoke_pass=${hasSmokePass}, final_success=${hasFinalSuccess}, final_failed=${hasFinalFailed}, exit=${exitCode}`);
+    }
+  }
 
+  // Test J: CART 404 regression specific
+  console.log("\n── Test J: /en/cart 404 must cause FAIL (regression) ──");
+  {
+    const { server, port } = await createMockServer("cart-fail", 200);
+    const script = generateRunnerScript(`http://127.0.0.1:${port}`, smokeFuncSource, printReportSource);
+    const { exitCode, stdout } = await runBashScript(script);
+    await closeServer(server);
     const cartFail = /SMOKE_FAIL.*CART/.test(stdout);
     if (cartFail && exitCode !== 0) {
       pass("CART 404 regression => FAIL + exit != 0");
