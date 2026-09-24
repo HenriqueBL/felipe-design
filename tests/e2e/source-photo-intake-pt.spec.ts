@@ -61,6 +61,7 @@ test.describe("Source Photo Intake — PT-BR labels and errors", () => {
 
     // Create order via PT checkout
     await authenticateWithSSR(page, customerEmail, customerPassword);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto(`/pt/finalizar?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
     const createBtn = page.locator("main").getByRole("button", { name: /criar pedido|create order/i });
     await expect(createBtn).toBeVisible({ timeout: 10_000 });
@@ -179,6 +180,7 @@ test.describe("Source Photo Intake — PT-BR labels and errors", () => {
     const page = await ctx.newPage();
 
     await authenticateWithSSR(page, customerEmail, customerPassword);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto(`/pt/finalizar?plan=${planId}&qty=1&currency=USD&key=${randomUUID()}`);
     const createBtn = page.locator("main").getByRole("button", { name: /criar pedido|create order/i });
     await expect(createBtn).toBeVisible({ timeout: 10_000 });

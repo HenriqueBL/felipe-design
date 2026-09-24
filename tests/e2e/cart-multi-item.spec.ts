@@ -30,6 +30,7 @@ test.describe("Multi-item Cart Journey", () => {
 
   test("full happy path: add 2 items → persist → auth → checkout → order created → cart cleared → redirect", async ({ page }) => {
     // ─── STEP 1: Unauthenticated visitor adds two plans ───
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services");
     await expect(page.locator("h1")).toContainText(/services/i);
 
@@ -47,6 +48,7 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(badge.first()).toContainText("2", { timeout: 5_000 });
 
     // ─── STEP 2: Navigate to cart — must show exactly 2 items ───
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     await expect(page.locator("h1")).toContainText(/cart|carrinho/i);
@@ -65,12 +67,14 @@ test.describe("Multi-item Cart Journey", () => {
 
     // ─── STEP 4: Authenticate — cart MUST survive auth boundary ───
     await authenticateWithSSR(page, state.email, state.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     const cartItemsAfterAuth = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(cartItemsAfterAuth).toHaveCount(2, { timeout: 10_000 });
 
     // ─── STEP 5: Checkout as authenticated user ───
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/checkout?cart=1");
     await expect(page).toHaveURL(/\/en\/checkout/);
     await expect(page.locator("main")).toBeVisible({ timeout: 10_000 });
@@ -138,6 +142,7 @@ test.describe("Multi-item Cart Journey", () => {
     }
 
     // ─── STEP 8: Cart MUST be empty after successful order ───
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
     const cartItemsAfterOrder = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
@@ -146,6 +151,7 @@ test.describe("Multi-item Cart Journey", () => {
 
   test("EN currency preservation: services?currency=BRL → cart shows BRL", async ({ page }) => {
     // Navigate to services with explicit BRL currency
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services?currency=BRL");
     await expect(page.locator("h1")).toContainText(/services/i);
 
@@ -158,6 +164,7 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(badge.first()).toContainText("1", { timeout: 5_000 });
 
     // Navigate to cart WITHOUT currency param — must still show BRL from localStorage
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
 
@@ -177,6 +184,7 @@ test.describe("Multi-item Cart Journey", () => {
   });
 
   test("PT locale: carrinho multi-item funciona em português", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/servicos");
     await expect(page.locator("h1")).toContainText(/servi/i);
 
@@ -187,6 +195,7 @@ test.describe("Multi-item Cart Journey", () => {
     await addButtons.nth(0).click();
     await addButtons.nth(1).click();
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/carrinho");
     await expect(page).toHaveURL(/\/pt\/carrinho/);
     await expect(page.locator("h1")).toContainText(/carrinho/i);
@@ -197,6 +206,7 @@ test.describe("Multi-item Cart Journey", () => {
 
   test("PT currency preservation: servicos?currency=USD → carrinho mostra USD", async ({ page }) => {
     // Navigate to PT services with explicit USD currency
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/servicos?currency=USD");
     await expect(page.locator("h1")).toContainText(/servi/i);
 
@@ -209,6 +219,7 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(badge.first()).toContainText("1", { timeout: 5_000 });
 
     // Navigate to cart WITHOUT currency param — must still show USD from localStorage
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/carrinho");
     await expect(page).toHaveURL(/\/pt\/carrinho/);
 

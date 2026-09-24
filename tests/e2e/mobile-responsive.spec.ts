@@ -64,6 +64,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const context = await browser.newContext({ viewport: MOBILE_VIEWPORT });
     const page = await context.newPage();
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services");
     await page.waitForLoadState("networkidle");
 
@@ -99,6 +100,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/checkout?plan=test&qty=1&currency=USD");
     await page.waitForLoadState("networkidle");
 
@@ -132,11 +134,13 @@ test.describe("Mobile Responsiveness E2E", () => {
     await authenticateWithSSR(page, customer.email, customer.password);
 
     // Test account list
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await page.waitForLoadState("networkidle");
     await assertNoHorizontalOverflow(page);
 
     // Test order detail
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/account/orders/${orderId}`);
     await page.waitForLoadState("networkidle");
 
@@ -179,6 +183,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const context = await browser.newContext({ viewport: MOBILE_VIEWPORT });
     const page = await context.newPage();
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/servicos");
     await page.waitForLoadState("networkidle");
 
@@ -202,6 +207,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/finalizar?plan=test&qty=1&currency=BRL");
     await page.waitForLoadState("networkidle");
 
@@ -220,6 +226,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/conta");
     await page.waitForLoadState("networkidle");
 
@@ -237,6 +244,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, admin.email, admin.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/dashboard");
     await page.waitForLoadState("networkidle");
 
@@ -259,6 +267,7 @@ test.describe("Mobile Responsiveness E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, admin.email, admin.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/dashboard/orders/${orderId}`);
     await page.waitForLoadState("networkidle");
 

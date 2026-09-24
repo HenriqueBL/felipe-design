@@ -56,6 +56,7 @@ test.describe("Complete Customer Journey — EN", () => {
     const customerContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const customerPage = await customerContext.newPage();
 
+    await customerPage.setExtraHTTPHeaders({ "x-test-country": "US" });
     await customerPage.goto("/en");
     await expect(customerPage.locator("html")).toHaveAttribute("lang", "en");
     await expect(customerPage).toHaveTitle(/Felipe Design/);
@@ -93,6 +94,7 @@ test.describe("Complete Customer Journey — EN", () => {
     await authenticateWithSSR(customerPage, state.customerEmail, state.customerPassword);
 
     // Navigate back to cart checkout — session now active
+    await customerPage.setExtraHTTPHeaders({ "x-test-country": "US" });
     await customerPage.goto("/en/checkout?cart=1");
     await expect(customerPage).toHaveURL(/\/en\/checkout\?cart=1/, { timeout: 15_000 });
 
@@ -169,6 +171,7 @@ test.describe("Complete Customer Journey — EN", () => {
     await expect(adminPage.locator("html")).toHaveAttribute("lang", "en");
 
     // Navigate to admin dashboard orders
+    await adminPage.setExtraHTTPHeaders({ "x-test-country": "US" });
     await adminPage.goto("/en/dashboard/orders");
     await expect(adminPage).toHaveURL(/\/en\/dashboard\/orders/);
 

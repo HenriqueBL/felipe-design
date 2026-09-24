@@ -53,6 +53,7 @@ test.describe("Error States & Edge Cases E2E", () => {
     const fakeUuid = "00000000-0000-0000-0000-000000000000";
     await authenticateWithSSR(page, customer.email, customer.password);
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/account/orders/${fakeUuid}`);
     await page.waitForLoadState("networkidle");
 
@@ -73,6 +74,7 @@ test.describe("Error States & Edge Cases E2E", () => {
     await authenticateWithSSR(page, customer.email, customer.password);
 
     // Navigate to checkout with non-existent plan
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/checkout?plan=invalid-plan-id&qty=1&currency=USD");
     await page.waitForLoadState("networkidle");
 
@@ -98,6 +100,7 @@ test.describe("Error States & Edge Cases E2E", () => {
     const page = await context.newPage();
     await authenticateWithSSR(page, customer.email, customer.password);
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/account/orders/${orderId}`);
     await page.waitForLoadState("networkidle");
 
@@ -125,6 +128,7 @@ test.describe("Error States & Edge Cases E2E", () => {
     const page = await context.newPage();
     await authenticateWithSSR(page, customer.email, customer.password);
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/account/orders/${orderId}`);
     await page.waitForLoadState("networkidle");
 
@@ -168,6 +172,7 @@ test.describe("Error States & Edge Cases E2E", () => {
 
   test("Unauthenticated server action returns friendly error (no stack trace)", async ({ page }) => {
     // Don't authenticate - try accessing protected account page directly
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account/orders/" + orderId);
     await page.waitForLoadState("networkidle");
 
