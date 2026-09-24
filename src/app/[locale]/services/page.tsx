@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { headers } from "next/headers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
-import { CURRENCIES, resolveCurrency } from "@/domain/checkout";
+import { extractCountry, resolveMarket } from "@/lib/market";
 import { listActivePlans, type ActivePlan } from "@/services/plans";
 import { formatMoney } from "@/lib/format";
-import { servicesPath } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
 import PlanSelector from "@/components/services/plan-selector";
 import type { Currency } from "@/types/database";
@@ -54,15 +53,17 @@ export async function generateMetadata({
 
 export default async function ServicesPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ currency?: string }>;
 }) {
   const current = resolve((await params).locale);
-  const { currency: currencyParam } = await searchParams;
   const dictionary = await getDictionary(current);
-  const currency: Currency = resolveCurrency(current, currencyParam);
+
+  // Server-authoritative currency: derived from country, never from query params.
+  const requestHeaders = await headers();
+  const country = extractCountry(requestHeaders);
+  const market = resolveMarket(country);
+  const currency: Currency = market.currency;
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   let plans: ActivePlan[] = [];
@@ -91,28 +92,6 @@ export default async function ServicesPage({
           <p className="cinematic-page-subtitle">
             {dictionary.services.subtitle}
           </p>
-
-          {/* Currency Toggle — preserved logic, cinematic styling */}
-          <div className="cinematic-currency-bar">
-            <span className="cinematic-currency-label">
-              {dictionary.services.currencySwitch}
-            </span>
-            <div className="cinematic-currency-toggle">
-              {CURRENCIES.map((option) => (
-                <Link
-                  key={option}
-                  href={servicesPath(current, option)}
-                  className={option === currency ? "active" : ""}
-                  aria-current={option === currency ? "page" : undefined}
-                >
-                  {option}
-                </Link>
-              ))}
-            </div>
-            <span className="cinematic-currency-note">
-              {dictionary.services.currencyNote}
-            </span>
-          </div>
         </div>
       </section>
 

@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getActivePlanWithPrice } from "@/services/plans";
 import { fetchDeliveryEstimate } from "@/services/delivery-estimate";
-import type { Currency } from "@/types/database";
+import { extractCountry, resolveMarket } from "@/lib/market";
 
-// O carrinho do browser envia apenas intenção (planId + quantity + moeda);
-// este endpoint revalida no servidor o preço vigente e os ângulos de cada
-// plano. Nenhum preço/total calculado no cliente é aceito como autoridade.
+// O carrinho do browser envia apenas intenção (planId + quantity);
+// moeda e preços são resolvidos exclusivamente no servidor com base
+// no país do visitante. Nenhum valor monetário do cliente é aceito.
 const bodySchema = z.object({
-  currency: z.enum(["BRL", "USD"]),
   items: z
     .array(
       z.object({
@@ -33,7 +32,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
-  const currency: Currency = parsed.data.currency;
+  // Server-authoritative currency resolution based on country
+  const country = extractCountry(request.headers);
+  const market = resolveMarket(country);
+  const currency = market.currency;
+
   const items = await Promise.all(
     parsed.data.items.map(async (item) => {
       try {
@@ -73,5 +76,5 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ items, totalImages, estimate });
+  return NextResponse.json({ items, totalImages, estimate, currency });
 }

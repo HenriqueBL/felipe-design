@@ -108,7 +108,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
       <section className="cart-empty">
         <h1>{labels.emptyTitle}</h1>
         <p>{labels.emptyDescription}</p>
-        <Link href={servicesPath(locale, currency)} className="btn btn-primary">
+        <Link href={servicesPath(locale)} className="btn btn-primary">
           {labels.continueShopping}
         </Link>
       </section>
@@ -198,7 +198,7 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
           {labels.total}: {formatMoney(totalCents, displayCurrency, intlLocale)}
         </p>
         <div className="cart-actions">
-          <Link href={servicesPath(locale, displayCurrency)}>{labels.continueShopping}</Link>
+          <Link href={servicesPath(locale)}>{labels.continueShopping}</Link>
           <button type="button" className="btn btn-secondary" onClick={() => clearCart()}>
             {labels.clear}
           </button>

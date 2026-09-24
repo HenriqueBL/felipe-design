@@ -7,7 +7,6 @@ import {
   deriveOrderDisplayState,
   isSafeNextPath,
   parseCheckoutParams,
-  resolveCurrency,
   sanitizeFileName,
   validateUploadFile,
 } from "@/domain/checkout";
@@ -19,17 +18,15 @@ function validParams(): URLSearchParams {
   return new URLSearchParams({
     plan: PLAN_ID,
     qty: "3",
-    currency: "USD",
     key: KEY_ID,
   });
 }
 
 describe("parseCheckoutParams (intencao enviada pelo browser)", () => {
-  it("aceita plano, quantidade, moeda e chave de idempotencia", () => {
+  it("aceita plano, quantidade e chave de idempotencia (moeda é server-authoritative)", () => {
     expect(parseCheckoutParams(validParams())).toEqual({
       planId: PLAN_ID,
       quantity: 3,
-      currency: "USD",
       idempotencyKey: KEY_ID,
     });
   });
@@ -52,10 +49,14 @@ describe("parseCheckoutParams (intencao enviada pelo browser)", () => {
     expect(parseCheckoutParams(params)).toBeNull();
   });
 
-  it("rejeita moeda invalida", () => {
+  it("ignora currency na query (server-authoritative)", () => {
     const params = validParams();
-    params.set("currency", "EUR");
-    expect(parseCheckoutParams(params)).toBeNull();
+    params.set("currency", "USD");
+    expect(parseCheckoutParams(params)).toEqual({
+      planId: PLAN_ID,
+      quantity: 3,
+      idempotencyKey: KEY_ID,
+    });
   });
 
   it("rejeita plano com formato invalido", () => {
@@ -84,7 +85,6 @@ describe("parseCheckoutParams (intencao enviada pelo browser)", () => {
     expect(parseCheckoutParams(params)).toEqual({
       planId: PLAN_ID,
       quantity: 3,
-      currency: "USD",
       idempotencyKey: KEY_ID,
     });
   });
@@ -98,7 +98,7 @@ describe("isSafeNextPath (retorno pos-magic-link)", () => {
   });
 
   it("aceita o checkout com intencao preservada na querystring", () => {
-    const next = "/pt/finalizar?plan=" + PLAN_ID + "&qty=2&currency=BRL&key=" + KEY_ID;
+    const next = "/pt/finalizar?plan=" + PLAN_ID + "&qty=2&key=" + KEY_ID;
     expect(isSafeNextPath(next)).toBe(true);
   });
 
@@ -115,23 +115,6 @@ describe("isSafeNextPath (retorno pos-magic-link)", () => {
     expect(isSafeNextPath("")).toBe(false);
     expect(isSafeNextPath(null)).toBe(false);
     expect(isSafeNextPath(undefined)).toBe(false);
-  });
-});
-
-describe("resolveCurrency", () => {
-  it("associa BRL ao PT e USD ao EN por padrao", () => {
-    expect(resolveCurrency("pt", undefined)).toBe("BRL");
-    expect(resolveCurrency("en", undefined)).toBe("USD");
-  });
-
-  it("respeita a troca manual de moeda", () => {
-    expect(resolveCurrency("en", "BRL")).toBe("BRL");
-    expect(resolveCurrency("pt", "USD")).toBe("USD");
-  });
-
-  it("cai no padrao do idioma com valor invalido", () => {
-    expect(resolveCurrency("pt", "EUR")).toBe("BRL");
-    expect(resolveCurrency("en", "EUR")).toBe("USD");
   });
 });
 
@@ -267,25 +250,23 @@ describe("estrutura de caminhos no storage", () => {
 });
 
 describe("buildCheckoutPath", () => {
-  it("gera o caminho publico de checkout em EN", () => {
+  it("gera o caminho publico de checkout em EN sem currency na query", () => {
     expect(
       buildCheckoutPath("en", {
         planId: PLAN_ID,
         quantity: 3,
-        currency: "USD",
         idempotencyKey: KEY_ID,
       }),
-    ).toBe("/en/checkout?plan=" + PLAN_ID + "&qty=3&currency=USD&key=" + KEY_ID);
+    ).toBe("/en/checkout?plan=" + PLAN_ID + "&qty=3&key=" + KEY_ID);
   });
 
-  it("gera o caminho publico de checkout em PT", () => {
+  it("gera o caminho publico de checkout em PT sem currency na query", () => {
     expect(
       buildCheckoutPath("pt", {
         planId: PLAN_ID,
         quantity: 3,
-        currency: "BRL",
         idempotencyKey: KEY_ID,
       }),
-    ).toBe("/pt/finalizar?plan=" + PLAN_ID + "&qty=3&currency=BRL&key=" + KEY_ID);
+    ).toBe("/pt/finalizar?plan=" + PLAN_ID + "&qty=3&key=" + KEY_ID);
   });
 });

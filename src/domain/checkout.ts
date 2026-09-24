@@ -2,24 +2,22 @@ import { z } from "zod";
 import type { Locale } from "@/lib/i18n/config";
 import type { Currency, OrderStatus } from "@/types/database";
 import { CART_MAX_ITEMS, CART_MAX_QUANTITY_PER_PLAN } from "./cart";
+import { resolveMarket } from "@/lib/market";
 
 export const CURRENCIES: readonly Currency[] = ["BRL", "USD"];
 
-export function defaultCurrencyForLocale(locale: Locale): Currency {
-  return locale === "pt" ? "BRL" : "USD";
-}
-
-export function resolveCurrency(locale: Locale, override: string | undefined): Currency {
-  if (override === "BRL" || override === "USD") {
-    return override;
-  }
-  return defaultCurrencyForLocale(locale);
+/**
+ * Resolve currency for a given country code.
+ * Server-authoritative: never accepts client overrides.
+ * BR → BRL, everything else → USD.
+ */
+export function currencyForCountry(country: string | null | undefined): Currency {
+  return resolveMarket(country).currency;
 }
 
 export const checkoutParamsSchema = z.object({
   planId: z.string().uuid(),
   quantity: z.coerce.number().int().min(1).max(100),
-  currency: z.enum(["BRL", "USD"]),
   idempotencyKey: z.string().uuid(),
 });
 
@@ -29,7 +27,6 @@ export function parseCheckoutParams(searchParams: URLSearchParams): CheckoutPara
   const parsed = checkoutParamsSchema.safeParse({
     planId: searchParams.get("plan") ?? undefined,
     quantity: searchParams.get("qty") ?? undefined,
-    currency: searchParams.get("currency") ?? undefined,
     idempotencyKey: searchParams.get("key") ?? undefined,
   });
   return parsed.success ? parsed.data : null;
@@ -40,7 +37,6 @@ export function buildCheckoutPath(locale: Locale, params: CheckoutParams): strin
   const query = new URLSearchParams({
     plan: params.planId,
     qty: String(params.quantity),
-    currency: params.currency,
     key: params.idempotencyKey,
   });
   return base + "?" + query.toString();
@@ -138,7 +134,7 @@ export function isMockPaymentsEnabled(
 }
 
 // Cart checkout intent: browser sends only planId + quantity per line plus
-// currency and idempotency key. Prices/totals are never trusted from client.
+// idempotency key. Currency and prices are never trusted from client.
 export const cartItemIntentSchema = z.object({
   planId: z.string().uuid(),
   quantity: z.coerce.number().int().min(1).max(CART_MAX_QUANTITY_PER_PLAN),
@@ -148,7 +144,6 @@ export type CartItemIntent = z.infer<typeof cartItemIntentSchema>;
 
 export const cartIntentSchema = z.object({
   items: z.array(cartItemIntentSchema).min(1).max(CART_MAX_ITEMS),
-  currency: z.enum(["BRL", "USD"]),
   idempotencyKey: z.string().uuid(),
 });
 
