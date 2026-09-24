@@ -27,6 +27,7 @@ test.describe("Portfolio Admin E2E", () => {
     await authenticateWithSSR(page, adminEmail, adminPassword);
 
     // Navigate to portfolio admin — must stay on dashboard (not redirect)
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/dashboard/portfolio");
     await expect(page).toHaveURL(/\/dashboard\/portfolio/, { timeout: 15_000 });
     await expect(page.locator("h1")).toContainText(/portfolio/i);

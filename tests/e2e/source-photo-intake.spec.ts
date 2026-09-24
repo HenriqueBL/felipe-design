@@ -29,6 +29,7 @@ async function createOrderViaCheckout(
   const checkoutUrl =
     `/en/checkout?plan=${planId}&qty=${knifeQuantity}&currency=USD&key=${randomUUID()}`;
   await authenticateWithSSR(page, email, password);
+  await page.setExtraHTTPHeaders({ "x-test-country": "US" });
   await page.goto(checkoutUrl);
   await expect(page).toHaveURL(/\/en\/checkout/, { timeout: 15_000 });
 
@@ -323,6 +324,7 @@ test.describe("Source Photo Intake — focused", () => {
     await authenticateWithSSR(page, state.customerEmail, state.customerPassword);
     const planId = state.planId;
     const key = randomUUID();
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto(`/pt/finalizar?plan=${planId}&qty=1&currency=USD&key=${key}`);
     // PT rewrites map to the English checkout slug internally.
     await expect(page).toHaveURL(/\/pt\//, { timeout: 15_000 });

@@ -85,9 +85,7 @@ const pt: Dictionary = {
     noPlans: "Nenhum plano disponível agora. Volte em breve.",
     priceUnavailable: "Preço indisponível",
     loadError: "Não foi possível carregar os planos. Tente novamente.",
-    currencySwitch: "Preços em",
-    currencyNote: "Você pode trocar a moeda a qualquer momento.",
-  },
+      },
   cart: {
     title: "Seu carrinho",
     emptyTitle: "Seu carrinho está vazio",

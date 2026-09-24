@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 
 import CartView from "@/components/cart/cart-view";
-import { resolveCurrency } from "@/domain/checkout";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, type Locale } from "@/lib/i18n/config";
+import { extractCountry, resolveMarket } from "@/lib/market";
 
 function resolve(locale: string): Locale {
   if (!isLocale(locale)) {
@@ -28,15 +29,17 @@ export async function generateMetadata({
 
 export default async function CartPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ currency?: string }>;
 }) {
   const current = resolve((await params).locale);
-  const { currency: currencyParam } = await searchParams;
   const dictionary = await getDictionary(current);
-  const currency = resolveCurrency(current, currencyParam);
+
+  // Server-authoritative currency: derived from country, never from query params.
+  const requestHeaders = await headers();
+  const country = extractCountry(requestHeaders);
+  const market = resolveMarket(country);
+  const currency = market.currency;
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   return (

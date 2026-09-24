@@ -1,72 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { detectPreferredLocale } from "@/lib/i18n/detect-locale";
 
+function headersWithCountry(country: string | null): Headers {
+  const h = new Headers();
+  if (country) {
+    h.set("x-test-country", country);
+  }
+  return h;
+}
+
 describe("detectPreferredLocale", () => {
-  it("pt-BR,pt;q=0.9,en;q=0.8 => pt", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "pt-BR,pt;q=0.9,en;q=0.8" }),
-    ).toBe("pt");
+  it("country BR => pt", () => {
+    expect(detectPreferredLocale(headersWithCountry("BR"))).toBe("pt");
   });
 
-  it("pt-PT,pt;q=0.9,en;q=0.8 => pt", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "pt-PT,pt;q=0.9,en;q=0.8" }),
-    ).toBe("pt");
+  it("country US => en", () => {
+    expect(detectPreferredLocale(headersWithCountry("US"))).toBe("en");
   });
 
-  it("en-US,en;q=0.9 => en", () => {
-    expect(detectPreferredLocale({ acceptLanguage: "en-US,en;q=0.9" })).toBe(
-      "en",
-    );
+  it("country PT => en (non-BR always en)", () => {
+    expect(detectPreferredLocale(headersWithCountry("PT"))).toBe("en");
   });
 
-  it("en-US,en;q=0.9,pt;q=0.5 => en (respects q-value priority)", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "en-US,en;q=0.9,pt;q=0.5" }),
-    ).toBe("en");
+  it("country AO => en", () => {
+    expect(detectPreferredLocale(headersWithCountry("AO"))).toBe("en");
   });
 
-  it("fr-FR,fr;q=0.9,en;q=0.8 => en (unsupported language falls back)", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "fr-FR,fr;q=0.9,en;q=0.8" }),
-    ).toBe("en");
+  it("no country header => en (fallback)", () => {
+    expect(detectPreferredLocale(new Headers())).toBe("en");
   });
 
-  it("no Accept-Language + country BR => pt", () => {
-    expect(detectPreferredLocale({ country: "BR" })).toBe("pt");
+  it("Accept-Language is ignored: BR + en-US => pt", () => {
+    const h = headersWithCountry("BR");
+    h.set("accept-language", "en-US,en;q=0.9");
+    expect(detectPreferredLocale(h)).toBe("pt");
   });
 
-  it("no Accept-Language + no country => en (absolute fallback)", () => {
-    expect(detectPreferredLocale({})).toBe("en");
-  });
-
-  it("no Accept-Language + country US => en", () => {
-    expect(detectPreferredLocale({ country: "US" })).toBe("en");
-  });
-
-  it("pt;q=0.5,en;q=0.9 => en (lower q-value loses)", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "pt;q=0.5,en;q=0.9" }),
-    ).toBe("en");
-  });
-
-  it("empty Accept-Language + country PT => pt", () => {
-    expect(detectPreferredLocale({ acceptLanguage: "", country: "PT" })).toBe(
-      "pt",
-    );
-  });
-
-  it("pt;q=0,en;q=0.8 => en (q=0 means explicitly rejected)", () => {
-    expect(
-      detectPreferredLocale({ acceptLanguage: "pt;q=0,en;q=0.8" }),
-    ).toBe("en");
-  });
-
-  it("pt;q=0 => fallback to country/default (q=0 excludes pt)", () => {
-    expect(detectPreferredLocale({ acceptLanguage: "pt;q=0" })).toBe("en");
-  });
-
-  it("cf-ipcountry BR => pt (Cloudflare header)", () => {
-    expect(detectPreferredLocale({ country: "BR" })).toBe("pt");
+  it("Accept-Language is ignored: US + pt-BR => en", () => {
+    const h = headersWithCountry("US");
+    h.set("accept-language", "pt-BR,pt;q=0.9");
+    expect(detectPreferredLocale(h)).toBe("en");
   });
 });

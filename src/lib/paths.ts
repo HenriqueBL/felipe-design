@@ -1,11 +1,9 @@
 import type { Locale } from "@/lib/i18n/config";
-import type { Currency } from "@/types/database";
 
 // Caminhos publicos semanticos por idioma. As rotas internas usam slugs em
 // ingles e o next.config reescreve os caminhos publicos de /pt.
-export function servicesPath(locale: Locale, currency?: Currency): string {
-  const base = locale === "en" ? "/en/services" : "/pt/servicos";
-  return currency ? base + "?currency=" + currency : base;
+export function servicesPath(locale: Locale): string {
+  return locale === "en" ? "/en/services" : "/pt/servicos";
 }
 
 export function cartPath(locale: Locale): string {

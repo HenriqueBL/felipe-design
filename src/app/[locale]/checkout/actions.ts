@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { getCurrentUser } from "@/services/auth";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/services/order-creation";
 import { parseCartIntent } from "@/domain/checkout";
 import { accountOrderPath, checkoutPath, loginPath } from "@/lib/paths";
+import { extractCountry, resolveMarket } from "@/lib/market";
 
 export interface CreateOrderResult {
   success: boolean;
@@ -19,13 +21,12 @@ export interface CreateOrderResult {
   redirectUrl?: string;
 }
 
-// O browser envia apenas a intencao: plano, quantidade, moeda e chave de
-// idempotencia. Preco, imagens, subtotal, total e prazo sao resolvidos
-// exclusivamente pela RPC create_order no servidor.
+// O browser envia apenas a intencao: plano, quantidade e chave de
+// idempotencia. Moeda, preco, imagens, subtotal, total e prazo sao
+// resolvidos exclusivamente pelo servidor com base no pais do visitante.
 const intentSchema = z.object({
   planId: z.string().uuid(),
   quantity: z.coerce.number().int().min(1).max(100),
-  currency: z.enum(["BRL", "USD"]),
   idempotencyKey: z.string().uuid(),
 });
 
@@ -37,7 +38,6 @@ function checkoutReturnUrl(
   locale: "en" | "pt",
   planId: string,
   quantity: number,
-  currency: "BRL" | "USD",
   idempotencyKey: string,
 ): string {
   return (
@@ -46,7 +46,6 @@ function checkoutReturnUrl(
     new URLSearchParams({
       plan: planId,
       qty: String(quantity),
-      currency: currency,
       key: idempotencyKey,
     }).toString()
   );
@@ -60,7 +59,6 @@ export async function createOrderAction(
   const parsed = intentSchema.safeParse({
     planId: formData.get("planId"),
     quantity: formData.get("quantity"),
-    currency: formData.get("currency"),
     idempotencyKey: formData.get("idempotencyKey"),
   });
 
@@ -76,11 +74,16 @@ export async function createOrderAction(
       current,
       parsed.data.planId,
       parsed.data.quantity,
-      parsed.data.currency,
       parsed.data.idempotencyKey,
     );
     redirect(loginPath(current, nextUrl));
   }
+
+  // Server-authoritative currency: derived from country header, never from form.
+  const requestHeaders = await headers();
+  const country = extractCountry(requestHeaders);
+  const market = resolveMarket(country);
+  const currency = market.currency;
 
   let createdOrderId: string | null = null;
   let errorCode: string | undefined;
@@ -89,7 +92,7 @@ export async function createOrderAction(
     const order = await createOrder({
       planId: parsed.data.planId,
       knifeQuantity: parsed.data.quantity,
-      currency: parsed.data.currency,
+      currency,
       idempotencyKey: parsed.data.idempotencyKey,
     });
     createdOrderId = order.id;
@@ -105,8 +108,8 @@ export async function createOrderAction(
   return { success: false, errorCode: errorCode ?? "UNKNOWN" };
 }
 
-// Cart checkout: browser envia apenas itens (planId+qty), moeda e chave.
-// Preco/total/images sao resolvidos atomicamente no RPC create_cart_order.
+// Cart checkout: browser envia apenas itens (planId+qty) e chave.
+// Moeda e precos sao resolvidos atomicamente no RPC create_cart_order.
 // Carrinho local e limpo somente apos criacao bem-sucedida.
 export async function createCartOrderAction(
   locale: string,
@@ -125,7 +128,6 @@ export async function createCartOrderAction(
 
   const intent = parseCartIntent({
     items: parsedItems,
-    currency: formData.get("currency"),
     idempotencyKey: formData.get("idempotencyKey"),
   });
 
@@ -142,6 +144,12 @@ export async function createCartOrderAction(
     redirect(loginPath(current, checkoutPath(current) + "?cart=1"));
   }
 
+  // Server-authoritative currency: derived from country header, never from form.
+  const requestHeaders = await headers();
+  const country = extractCountry(requestHeaders);
+  const market = resolveMarket(country);
+  const currency = market.currency;
+
   let createdOrderId: string | null = null;
   let errorCode: string | undefined;
 
@@ -151,7 +159,7 @@ export async function createCartOrderAction(
         planId: item.planId,
         quantity: item.quantity,
       })),
-      currency: intent.currency,
+      currency,
       idempotencyKey: intent.idempotencyKey,
     });
     createdOrderId = order.id;

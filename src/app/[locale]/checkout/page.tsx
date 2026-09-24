@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { parseCheckoutParams } from "@/domain/checkout";
@@ -8,6 +9,7 @@ import { fetchDeliveryEstimate } from "@/services/delivery-estimate";
 import { getCurrentUser } from "@/services/auth";
 import { formatMoney } from "@/lib/format";
 import { checkoutPath, servicesPath } from "@/lib/paths";
+import { extractCountry, resolveMarket } from "@/lib/market";
 import LoginForm from "@/components/login-form";
 import CreateOrderForm from "@/components/checkout/create-order-form";
 import CartCheckoutView from "@/components/checkout/cart-checkout-view";
@@ -52,6 +54,12 @@ export default async function CheckoutPage({
   const current = resolve((await params).locale);
   const query = await searchParams;
   const dictionary = await getDictionary(current);
+
+  // Server-authoritative currency: derived from country, never from query params.
+  const requestHeaders = await headers();
+  const country = extractCountry(requestHeaders);
+  const market = resolveMarket(country);
+  const currency = market.currency;
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
   // Cart checkout: ?cart=1 signals multi-item flow. Client-side cart-store
@@ -66,6 +74,7 @@ export default async function CheckoutPage({
       <CartCheckoutView
         locale={current}
         intlLocale={intlLocale}
+        currency={currency}
         user={user && user.email ? { email: user.email } : null}
         labels={{
           title: dictionary.checkout.title,
@@ -120,7 +129,7 @@ export default async function CheckoutPage({
 
   const planWithPrice = await getActivePlanWithPrice(
     checkoutParams.planId,
-    checkoutParams.currency,
+    currency,
   ).catch(() => null);
 
   if (!planWithPrice) {
@@ -150,14 +159,13 @@ export default async function CheckoutPage({
   const user = await getCurrentUser();
 
   // URL de retorno pos-login preserva apenas a intencao (plano, quantidade,
-  // moeda, chave). Preco, total e prazo sao recalculados no servidor.
+  // chave). Moeda e preco sao resolvidos no servidor.
   const nextUrl =
     checkoutPath(current) +
     "?" +
     new URLSearchParams({
       plan: checkoutParams.planId,
       qty: String(checkoutParams.quantity),
-      currency: checkoutParams.currency,
       key: checkoutParams.idempotencyKey,
     }).toString();
 
@@ -187,11 +195,11 @@ export default async function CheckoutPage({
             </div>
             <div className="row">
               <span>{dictionary.checkout.unitPrice}</span>
-              <span>{formatMoney(priceCents, checkoutParams.currency, intlLocale)}</span>
+              <span>{formatMoney(priceCents, currency, intlLocale)}</span>
             </div>
             <div className="row total">
               <span>{dictionary.checkout.total}</span>
-              <span>{formatMoney(totalCents, checkoutParams.currency, intlLocale)}</span>
+              <span>{formatMoney(totalCents, currency, intlLocale)}</span>
             </div>
           </div>
         </section>
@@ -229,7 +237,6 @@ export default async function CheckoutPage({
                 }}
                 planId={checkoutParams.planId}
                 quantity={checkoutParams.quantity}
-                currency={checkoutParams.currency}
                 idempotencyKey={checkoutParams.idempotencyKey}
               />
             </div>

@@ -63,6 +63,7 @@ interface CartCheckoutLabels {
 interface CartCheckoutViewProps {
   locale: Locale;
   intlLocale: string;
+  currency: Currency;
   user: { email: string } | null;
   labels: CartCheckoutLabels;
 }
@@ -81,7 +82,7 @@ async function fetchCartPricing(cart: Cart): Promise<CartPricingResponse> {
     const response = await fetch("/api/cart-pricing", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: cart.items, currency: cart.currency }),
+      body: JSON.stringify({ items: cart.items }),
     });
     if (!response.ok) {
       return empty;
@@ -109,6 +110,7 @@ async function fetchCartPricing(cart: Cart): Promise<CartPricingResponse> {
 export default function CartCheckoutView({
   locale,
   intlLocale,
+  currency,
   user,
   labels,
 }: CartCheckoutViewProps) {
@@ -209,7 +211,7 @@ export default function CartCheckoutView({
                     <span>{labels.unitPrice}</span>
                     <span>
                       {info?.priceCents != null
-                        ? formatMoney(info.priceCents, cart.currency, intlLocale)
+                        ? formatMoney(info.priceCents, currency, intlLocale)
                         : labels.priceUnavailable}
                     </span>
                   </div>
@@ -217,7 +219,7 @@ export default function CartCheckoutView({
                     <div className="row">
                       <span>{labels.subtotal}</span>
                       <span>
-                        {formatMoney(info.priceCents * item.quantity, cart.currency, intlLocale)}
+                        {formatMoney(info.priceCents * item.quantity, currency, intlLocale)}
                       </span>
                     </div>
                   ) : null}
@@ -232,7 +234,7 @@ export default function CartCheckoutView({
             </div>
             <div className="row total">
               <span>{labels.total}</span>
-              <span>{formatMoney(totalCents, cart.currency, intlLocale)}</span>
+              <span>{formatMoney(totalCents, currency, intlLocale)}</span>
             </div>
           </div>
           {estimate ? (
@@ -273,7 +275,6 @@ export default function CartCheckoutView({
                     planId: item.planId,
                     quantity: item.quantity,
                   }))}
-                  currency={cart.currency}
                   idempotencyKey={idempotencyKey}
                   onSuccess={(result) => {
                     clearCart();

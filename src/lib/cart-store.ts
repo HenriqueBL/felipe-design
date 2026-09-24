@@ -8,7 +8,6 @@ import {
   cartTotalKnives,
   normalizeCart,
 } from "@/domain/cart";
-import type { Currency } from "@/types/database";
 
 const CART_EVENT = "felipe-cart-change";
 
@@ -39,18 +38,18 @@ function writeCart(cart: Cart | null): void {
   window.dispatchEvent(new CustomEvent(CART_EVENT));
 }
 
-// O carrinho guarda apenas intenção (planId, quantity, currency). Preços e
-// totais são sempre revalidados no servidor; nada salvo aqui é autoridade.
+// O carrinho guarda apenas intenção (planId, quantity). Moeda é
+// server-authoritative e nunca persistida como autoridade. Legacy carts
+// com campo currency são lidos mas o valor é ignorado para display/pricing.
 // Aggregate knife limit is enforced HERE (not in normalizeCart) so that
 // exceeding the cap rejects the operation deterministically instead of
 // silently mutating unrelated items.
 export function addToCart(
   planId: string,
   quantity: number,
-  currency: Currency,
 ): CartMutationResult {
-  const current = readCart() ?? { currency, items: [] };
-  const baseItems = current.currency === currency ? current.items : [];
+  const current = readCart() ?? { items: [] };
+  const baseItems = current.items;
   // Merge with existing same-plan entry first (normalizeCart deduplicates later,
   // but we need accurate total for the guard before writing anything).
   const merged = new Map<string, number>();
@@ -69,7 +68,7 @@ export function addToCart(
       error: "MAX_TOTAL_KNIVES",
     };
   }
-  const cart: Cart = { currency, items: candidateItems };
+  const cart: Cart = { items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
   return { cart: normalized, error: null };
@@ -90,7 +89,7 @@ export function updateQuantity(
     // Reject: preserve previous state exactly.
     return { cart: current, error: "MAX_TOTAL_KNIVES" };
   }
-  const cart: Cart = { currency: current.currency, items: candidateItems };
+  const cart: Cart = { items: candidateItems };
   const normalized = normalizeCart(cart);
   writeCart(normalized);
   return { cart: normalized, error: null };
@@ -102,23 +101,13 @@ export function removeItem(planId: string): Cart | null {
     return null;
   }
   const items = current.items.filter((item) => item.planId !== planId);
-  const cart: Cart | null = items.length > 0 ? { currency: current.currency, items } : null;
+  const cart: Cart | null = items.length > 0 ? { items } : null;
   writeCart(cart);
   return cart;
 }
 
 export function clearCart(): void {
   writeCart(null);
-}
-
-// Moeda diferente exige carrinho novo (nunca converter BRL <-> USD).
-export function reconcileCartCurrency(currency: Currency): Cart | null {
-  const current = readCart();
-  if (!current || current.currency === currency) {
-    return current;
-  }
-  clearCart();
-  return null;
 }
 
 export function subscribeToCart(listener: () => void): () => void {

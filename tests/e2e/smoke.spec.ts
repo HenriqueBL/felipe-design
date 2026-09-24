@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("E2E Infrastructure Smoke", () => {
   test("homepage loads in EN with correct locale and navigation", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en");
     await expect(page).toHaveTitle(/Felipe Design/);
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
@@ -19,6 +20,7 @@ test.describe("E2E Infrastructure Smoke", () => {
   });
 
   test("homepage loads in PT with correct locale and navigation", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt");
     await expect(page).toHaveTitle(/Felipe Design/);
     await expect(page.locator("html")).toHaveAttribute("lang", "pt");
@@ -41,6 +43,7 @@ test.describe("E2E Infrastructure Smoke", () => {
   });
 
   test("services page renders plans from backend in EN", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services");
     await expect(page.locator("h1")).toContainText(/services/i);
 
@@ -51,6 +54,7 @@ test.describe("E2E Infrastructure Smoke", () => {
   });
 
   test("services page renders plans from backend in PT via canonical route", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/servicos");
     await expect(page.locator("h1")).toContainText(/serviços/i);
 
@@ -61,18 +65,21 @@ test.describe("E2E Infrastructure Smoke", () => {
   });
 
   test("unauthenticated user is redirected from account to login", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/login/);
     await expect(page.locator("h1")).toContainText(/sign in/i);
   });
 
   test("unauthenticated user is redirected from PT conta to login", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/conta");
     await expect(page).toHaveURL(/\/pt\/login/);
     await expect(page.locator("h1")).toContainText(/entrar/i);
   });
 
   test("checkout without valid params shows invalid selection message", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/checkout");
     await expect(page.locator("main")).toContainText(/invalid|choose|back to services/i);
   });
@@ -81,6 +88,7 @@ test.describe("E2E Infrastructure Smoke", () => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en");
     await page.waitForLoadState("networkidle");
 

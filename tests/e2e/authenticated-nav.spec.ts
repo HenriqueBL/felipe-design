@@ -33,6 +33,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
   test("EN header shows sign-out, not sign-in, when authenticated", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en");
 
     const desktopNav = page.locator("nav.site-nav");
@@ -58,6 +59,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
   test("PT header shows Sair, not Entrar, when authenticated", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt");
 
     const desktopNav = page.locator("nav.site-nav");
@@ -81,6 +83,7 @@ test.describe("Authenticated navigation reflects session", () => {
 
   test("header keeps reflecting the session after page reload", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services");
     await page.reload();
     await page.waitForLoadState("networkidle");

@@ -84,6 +84,7 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
 
   test("EN: click Sign out — header flips to Sign in without page.reload()", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en");
 
     // Verify signed-in state
@@ -126,6 +127,7 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
     await clickSignOut(page);
     await expect(page).toHaveURL(/\/en$/, { timeout: 10_000 });
 
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(checkoutUrl);
     await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
     await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -133,6 +135,7 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
 
   test("EN: signed-out state persists after an actual refresh", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en");
     await clickSignOut(page);
     await assertSignedOutEN(page);
@@ -145,6 +148,7 @@ test.describe("Sign out updates UI immediately (no manual refresh)", () => {
 
   test("PT: Sair — header muda para Entrar sem F5", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt");
 
     // Verify signed-in state

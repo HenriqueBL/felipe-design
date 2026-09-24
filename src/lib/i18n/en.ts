@@ -83,9 +83,7 @@ const en = {
     noPlans: "No plans available right now. Please check back soon.",
     priceUnavailable: "Price not available",
     loadError: "We could not load the plans. Please try again.",
-    currencySwitch: "Prices in",
-    currencyNote: "You can switch currency at any time.",
-  },
+      },
   cart: {
     title: "Your cart",
     emptyTitle: "Your cart is empty",

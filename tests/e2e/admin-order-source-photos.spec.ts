@@ -58,6 +58,7 @@ test.describe("Admin Order Detail — source photo grouping (2 knives)", () => {
 
     // ── Create a 2-knife order as the customer ──
     await authenticateWithSSR(page, customer.email, customer.password);
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto(`/en/checkout?plan=${planId}&qty=2&currency=USD&key=${randomUUID()}`);
     const createBtn = page.locator("main").getByRole("button", { name: /create order/i });
     await expect(createBtn).toBeVisible({ timeout: 10_000 });

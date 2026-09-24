@@ -7,7 +7,6 @@ import {
   type CreateOrderResult,
 } from "@/app/[locale]/checkout/actions";
 import type { Locale } from "@/lib/i18n/config";
-import type { Currency } from "@/types/database";
 
 interface CreateCartOrderFormLabels {
   createCartOrder: string;
@@ -27,7 +26,6 @@ interface CreateCartOrderFormProps {
   locale: Locale;
   labels: CreateCartOrderFormLabels;
   items: CartOrderItemIntent[];
-  currency: Currency;
   idempotencyKey: string;
   onSuccess?: (result: CreateOrderResult) => void;
 }
@@ -52,7 +50,6 @@ export default function CreateCartOrderForm({
   locale,
   labels,
   items,
-  currency,
   idempotencyKey,
   onSuccess,
 }: CreateCartOrderFormProps) {
@@ -84,7 +81,6 @@ export default function CreateCartOrderForm({
         name="items"
         value={JSON.stringify(items)}
       />
-      <input type="hidden" name="currency" value={currency} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <button type="submit" className="btn btn-primary" disabled={isPending}>
         {isPending ? labels.creatingCartOrder : labels.createCartOrder}

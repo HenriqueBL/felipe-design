@@ -1324,7 +1324,8 @@ textarea {
   font-size: 0.9rem;
 }
 
-.currency-toggle {
+/* .currency-toggle removed — currency is now server-authoritative by country */
+._removed_currency-toggle {
   display: inline-flex;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2238,56 +2239,7 @@ textarea {
   background: var(--surface-2);
 }
 
-.cinematic-currency-bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 32px;
-  flex-wrap: wrap;
-}
-
-.cinematic-currency-label {
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.cinematic-currency-toggle {
-  display: flex;
-  gap: 4px;
-}
-
-.cinematic-currency-toggle a {
-  padding: 6px 16px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  transition: all var(--transition-base);
-  text-decoration: none;
-}
-
-.cinematic-currency-toggle a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.cinematic-currency-toggle a.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
-  font-weight: 600;
-}
-
-.cinematic-currency-note {
-  font-size: 0.78rem;
-  color: var(--muted);
-  font-style: italic;
-}
+/* .cinematic-currency-bar and children removed — currency is server-authoritative by country */
 
 .cinematic-services-full-grid {
   display: grid;

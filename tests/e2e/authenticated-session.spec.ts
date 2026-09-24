@@ -27,6 +27,7 @@ test.describe("Authenticated Session — SSR Cookie Strategy", () => {
     await authenticateWithSSR(page, email, password);
 
     // Navigate to protected route — should NOT redirect to login
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/account/, { timeout: 10_000 });
 
@@ -39,6 +40,7 @@ test.describe("Authenticated Session — SSR Cookie Strategy", () => {
     await authenticateWithSSR(page, email, password);
 
     // First navigation
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/account/);
 
@@ -55,10 +57,12 @@ test.describe("Authenticated Session — SSR Cookie Strategy", () => {
     await authenticateWithSSR(page, email, password);
 
     // Visit account
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/account/);
 
     // Navigate to another protected route via link or direct URL
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/dashboard");
     // Non-admin users should be redirected away from dashboard by middleware
     // This proves the session IS recognized (middleware checked role, not auth absence)

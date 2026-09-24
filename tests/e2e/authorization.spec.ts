@@ -79,14 +79,17 @@ test.describe("Authorization & Access Control E2E", () => {
 
   test("Unauthenticated user is redirected from protected routes", async ({ page }) => {
     // EN account
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/login|\/en\/sign-in/i, { timeout: 10000 });
 
     // PT conta
+    await page.setExtraHTTPHeaders({ "x-test-country": "BR" });
     await page.goto("/pt/conta");
     await expect(page).toHaveURL(/\/pt\/login|\/pt\/entrar/i, { timeout: 10000 });
 
     // Admin route (should also redirect to login, not show dashboard)
+    await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/dashboard");
     await expect(page).not.toHaveURL(/\/dashboard/, { timeout: 10000 });
     await expect(page.locator("h1")).not.toContainText(/dashboard/i);
