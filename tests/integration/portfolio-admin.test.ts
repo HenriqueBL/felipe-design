@@ -368,22 +368,27 @@ describe("Portfolio — Media Constraint (migration 0021)", () => {
     expect(row.id).toBeTruthy();
   });
 
-  it("item sem nenhuma mídia é REJEITADO pela constraint", async () => {
-    const { error } = await serviceRole.from("portfolio_items").insert({
-      title: "No media",
+  it("item sem nenhuma mídia legacy é permitido (constraint removida na migration 0023)", async () => {
+    // Migration 0023 removeu portfolio_items_media_required; novos works usam
+    // portfolio_item_media como fonte autoritativa. Inserção direta via DB sem
+    // campos legacy deve ser permitida (a validação de "pelo menos 1 media"
+    // agora é responsabilidade da camada de serviço/aplicação).
+    const { data, error } = await serviceRole.from("portfolio_items").insert({
+      title: "No legacy media",
       image_storage_path: null,
       before_storage_path: null,
       after_storage_path: null,
       published: false,
       featured: false,
       sort_order: 0,
-    });
-    expect(error).toBeTruthy();
-    expect(error!.message).toMatch(/portfolio_items_media_required|check/i);
+    }).select("id").single();
+    expect(error).toBeNull();
+    expect(data?.id).toBeTruthy();
+    if (data?.id) createdIds.push(data.id);
   });
 
-  it("item com apenas before (sem after) é REJEITADO", async () => {
-    const { error } = await serviceRole.from("portfolio_items").insert({
+  it("item com apenas before (sem after) é permitido (constraint removida na migration 0023)", async () => {
+    const { data, error } = await serviceRole.from("portfolio_items").insert({
       title: "Only before",
       image_storage_path: null,
       before_storage_path: "items/before-only.jpg",
@@ -391,9 +396,10 @@ describe("Portfolio — Media Constraint (migration 0021)", () => {
       published: false,
       featured: false,
       sort_order: 0,
-    });
-    expect(error).toBeTruthy();
-    expect(error!.message).toMatch(/portfolio_items_media_required|check/i);
+    }).select("id").single();
+    expect(error).toBeNull();
+    expect(data?.id).toBeTruthy();
+    if (data?.id) createdIds.push(data.id);
   });
 });
 

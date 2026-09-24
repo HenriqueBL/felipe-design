@@ -113,7 +113,7 @@ export default async function LocaleLayout({
                 className="brand-logo"
                 priority
               />
-              <span>Felipe Design</span>
+              <span>Felipe Silva</span>
             </Link>
             <nav className="site-nav">
               <Link href={servicesPath(current)}>{dictionary.nav.services}</Link>
@@ -158,7 +158,7 @@ export default async function LocaleLayout({
                   height={40}
                   className="brand-logo"
                 />
-                <span>Felipe Design</span>
+                <span>Felipe Silva</span>
               </Link>
               <p className="footer-tagline">{dictionary.footer.tagline}</p>
             </div>
