@@ -110,14 +110,6 @@ export function clearCart(): void {
   writeCart(null);
 }
 
-// Currency is server-authoritative. Legacy carts may carry a currency field
-// from before geo-lock; we preserve items but never use the stored currency
-// for display or pricing. This function exists for backward compatibility
-// during migration — it no longer clears the cart on mismatch.
-export function reconcileCartCurrency(_currency: string): Cart | null {
-  return readCart();
-}
-
 export function subscribeToCart(listener: () => void): () => void {
   window.addEventListener(CART_EVENT, listener);
   window.addEventListener("storage", listener);

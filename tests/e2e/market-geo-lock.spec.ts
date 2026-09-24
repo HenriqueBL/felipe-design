@@ -1,9 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { getOrCreateTestPlan } from "./helpers/fixtures";
-import {
-  addFirstPlanToCartViaUI,
-  navigateCartCheckoutFlow,
-} from "./helpers/checkout";
+import { addFirstPlanToCartViaUI } from "./helpers/checkout";
 
 /**
  * E2E geo-lock validation — market authority enforcement.

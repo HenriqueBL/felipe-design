@@ -7,7 +7,6 @@ import {
   type CreateOrderResult,
 } from "@/app/[locale]/checkout/actions";
 import type { Locale } from "@/lib/i18n/config";
-import type { Currency } from "@/types/database";
 
 interface CreateCartOrderFormLabels {
   createCartOrder: string;
