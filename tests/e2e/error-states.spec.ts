@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 // Create a small invalid file (text file pretending to be image)
 const INVALID_FILE_CONTENT = Buffer.from("This is not an image", "utf-8");
@@ -23,16 +24,14 @@ test.describe("Error States & Edge Cases E2E", () => {
     const page = await context.newPage();
 
     await authenticateWithSSR(page, customer.email, customer.password);
-    await page.goto("/en/services");
-    const chooseBtn = page.locator('a[href*="checkout"], button:has-text("Choose")').first();
-    await chooseBtn.click();
-    await page.waitForURL(/\/en\/checkout/, { timeout: 10000 });
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Scope to main: the header now renders a Sign out <button type="submit">,
     // which a generic `button[type="submit"]` matcher would click instead.
     const createBtn = page
       .locator("main")
-      .getByRole("button", { name: /create order|finalize|finalizar/i });
+      .getByRole("button", { name: /create order/i });
     await createBtn.click();
     await page.waitForURL(/\/en\/account\/orders\//, { timeout: 15000 });
     orderId = page.url().match(/orders\/([0-9a-f-]+)/)?.[1] ?? "";

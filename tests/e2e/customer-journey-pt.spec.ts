@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateCartCheckoutFlow } from "./helpers/checkout";
 
 const FIXTURE_IMAGE = path.resolve(__dirname, "fixtures/tiny.jpg");
 
@@ -75,47 +76,38 @@ test.describe("Complete Customer Journey — PT-BR", () => {
     await expect(customerPage.locator("h1")).toContainText(/serviços/i);
 
     // Verify plan card with BRL price
-    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
-    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
+    // Semantic selector: article with data-plan-id attribute
+    const planCard = customerPage.locator("article[data-plan-id]").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
     // Verify BRL currency is displayed (not USD)
     const priceText = await planCard.textContent();
     expect(priceText).toMatch(/R\$/);
 
-    // ─── STEP C: Choose plan → navigate to /pt/finalizar (canonical checkout) ───
-    // Cinematic Services page uses "Adicionar ao carrinho" buttons inside <article> elements.
-    // Legacy used "Escolher" links. Support both for resilience.
-    const chooseBtn = customerPage.locator(
-      'button:has-text("Adicionar ao carrinho"), a[href*="finalizar"], button:has-text("Escolher"), a:has-text("Escolher")',
-    ).first();
-    await chooseBtn.click();
-    // After adding to cart, navigate to checkout explicitly if not redirected
-    if (!customerPage.url().includes("/finalizar")) {
-      await customerPage.goto("/pt/finalizar");
-    }
-    await expect(customerPage).toHaveURL(/\/pt\/finalizar/);
+    // ─── STEP C: Real cart flow — Serviços → Adicionar ao carrinho → Carrinho → Finalizar ───
+    // Exercises the actual user journey through the current UI.
+    await navigateCartCheckoutFlow(customerPage, "pt");
 
-    // Verify checkout shows order summary in PT
-    await expect(customerPage.locator("main")).toContainText(/confirmar|resumo do pedido/i);
+    // Verify checkout shows cart items in PT
+    await expect(customerPage.locator("main")).toContainText(/carrinho|item/i);
 
     // Verify BRL price in checkout
     const checkoutContent = await customerPage.locator("main").textContent();
     expect(checkoutContent).toMatch(/R\$/);
 
     // ─── STEP D: Authentication via SSR cookies ───
-    const checkoutUrlWithIntent = customerPage.url();
-    expect(checkoutUrlWithIntent).toMatch(/plan=/);
-
+    // Cart checkout renders a Link to login for unauthenticated users.
+    // Authenticate via @supabase/ssr cookie injection, then revisit checkout.
     await authenticateWithSSR(customerPage, state.customerEmail, state.customerPassword);
 
-    // Navigate back to checkout with intent preserved
-    await customerPage.goto(checkoutUrlWithIntent);
-    await expect(customerPage).toHaveURL(/\/pt\/finalizar/, { timeout: 15_000 });
+    // Navigate back to cart checkout — session now active
+    await customerPage.goto("/pt/finalizar?cart=1");
+    await expect(customerPage).toHaveURL(/\/pt\/finalizar\?cart=1/, { timeout: 15_000 });
 
     // ─── STEP E: Create order ───
-    // Scope to main: the header now renders a Sign out <button type="submit">.
-    const createBtn = customerPage.locator("main").getByRole("button", { name: /criar pedido/i });
+    // Authenticated cart checkout shows "Finalizar pedido" / "Create cart order" button.
+    // Scope to main: the header renders a Sign out <button type="submit">.
+    const createBtn = customerPage.locator("main").getByRole("button", { name: /finalizar pedido|criar pedido|create cart order/i });
     await expect(createBtn).toBeVisible({ timeout: 10_000 });
     await createBtn.click();
 

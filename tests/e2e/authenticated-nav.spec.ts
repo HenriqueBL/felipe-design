@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 /**
  * Regression: the site header must reflect the real Supabase session.
@@ -105,27 +106,21 @@ test.describe("Authenticated navigation reflects session", () => {
   test("authenticated checkout renders create-order step, not magic link form", async ({ page }) => {
     await authenticateWithSSR(page, email, password);
 
-    await page.goto("/en/services");
-    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
-    // Legacy used "Choose" links. Support both for resilience.
-    const chooseBtn = page
-      .locator('button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose")')
-      .first();
-    await chooseBtn.click();
-    // After adding to cart, navigate to checkout explicitly if not redirected
-    if (!page.url().includes("/checkout")) {
-      await page.goto("/en/checkout");
-    }
-    await expect(page).toHaveURL(/\/en\/checkout/);
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Authenticated visitors must land directly on the order step.
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
-    await expect(page.locator('button:has-text("Create order")')).toBeVisible();
+    await expect(
+      page.locator("main").getByRole("button", { name: /create order/i }),
+    ).toBeVisible();
 
     // Refresh must keep the authenticated behavior and the intent params.
     await page.reload();
-    await expect(page).toHaveURL(/\/en\/checkout\?/);
+    await expect(page).toHaveURL(/\/en\/checkout\?plan=/);
     await expect(page.locator('input[type="email"]')).not.toBeVisible();
-    await expect(page.locator('button:has-text("Create order")')).toBeVisible();
+    await expect(
+      page.locator("main").getByRole("button", { name: /create order/i }),
+    ).toBeVisible();
   });
 });

@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateToSingleItemCheckout } from "./helpers/checkout";
 
 test.describe("Authorization & Access Control E2E", () => {
   let customerA: { userId: string; email: string; password: string };
@@ -41,17 +42,8 @@ test.describe("Authorization & Access Control E2E", () => {
     await page.goto("/en/account");
     await expect(page).toHaveURL(/\/en\/account/, { timeout: 10000 });
 
-    // Now navigate to services and choose plan — session persists across navigations
-    await page.goto("/en/services");
-    await expect(page.locator("h1")).toContainText(/services/i, { timeout: 10000 });
-
-    const chooseBtn = page.locator('a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose"), a:has-text("Select")').first();
-    await expect(chooseBtn).toBeVisible({ timeout: 10000 });
-    await chooseBtn.click();
-
-    // Checkout should now render in authenticated state directly
-    await expect(page).toHaveURL(/\/en\/checkout/, { timeout: 10000 });
-    await page.waitForLoadState("networkidle");
+    // Use helper for single-item checkout fixture creation
+    await navigateToSingleItemCheckout(page, "en");
 
     // Scope to main: the header now renders a Sign out <button type="submit">,
     // which a generic `button[type="submit"]` matcher would click instead.

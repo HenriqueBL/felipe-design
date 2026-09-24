@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { createTestUser, deleteTestUser } from "./helpers/auth";
 import { authenticateWithSSR } from "./helpers/ssr-auth";
 import { getOrCreateTestPlan, cleanupUserData } from "./helpers/fixtures";
+import { navigateCartCheckoutFlow } from "./helpers/checkout";
 
 const FIXTURE_IMAGE = path.resolve(__dirname, "fixtures/tiny.jpg");
 
@@ -75,47 +76,30 @@ test.describe("Complete Customer Journey — EN", () => {
     await expect(customerPage.locator("h1")).toContainText(/services/i);
 
     // Verify at least one plan is rendered with real backend data
-    // Cinematic redesign uses .cinematic-service-card; legacy uses .plan-card
-    const planCard = customerPage.locator(".cinematic-service-card, .plan-card, [data-plan]").first();
+    // Semantic selector: article with data-plan-id attribute
+    const planCard = customerPage.locator("article[data-plan-id]").first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
 
-    // ─── STEP C: Choose a plan → navigate to checkout ───
-    // Cinematic Services page uses "Add to cart" buttons inside <article> elements.
-    // Legacy used "Choose" links. Support both for resilience.
-    const chooseBtn = customerPage.locator(
-      'button:has-text("Add to cart"), a[href*="checkout"], button:has-text("Choose"), a:has-text("Choose")',
-    ).first();
-    await chooseBtn.click();
-    // After adding to cart, navigate to checkout explicitly
-    if (!customerPage.url().includes("/checkout")) {
-      await customerPage.goto("/en/checkout");
-    }
-    await expect(customerPage).toHaveURL(/\/en\/checkout/);
+    // ─── STEP C: Real cart flow — Services → Add to cart → Cart → Checkout ───
+    // Exercises the actual user journey through the current UI.
+    await navigateCartCheckoutFlow(customerPage, "en");
 
-    // Verify checkout shows order summary
-    await expect(customerPage.locator("main")).toContainText(/confirm your order|order summary/i);
+    // Verify checkout shows cart items
+    await expect(customerPage.locator("main")).toContainText(/cart|item/i);
 
     // ─── STEP D: Authentication (SSR cookies for journey stability) ───
-    // Capture the current checkout URL with intent params before authenticating
-    const checkoutUrlWithIntent = customerPage.url();
-    expect(checkoutUrlWithIntent).toMatch(/plan=/);
-
-    // Authenticate via @supabase/ssr cookie injection (bypasses Magic Link UI for stable journey test)
-    // A separate dedicated test validates the real Magic Link/callback flow
+    // Cart checkout renders a Link to login for unauthenticated users.
+    // Authenticate via @supabase/ssr cookie injection, then revisit checkout.
     await authenticateWithSSR(customerPage, state.customerEmail, state.customerPassword);
 
-    // Navigate back to checkout with original intent params preserved
-    await customerPage.goto(checkoutUrlWithIntent);
-    await expect(customerPage).toHaveURL(/\/en\/checkout/, { timeout: 15_000 });
-
-    // Verify the checkout still has the plan/quantity params (intent preserved through auth)
-    const currentUrl = customerPage.url();
-    expect(currentUrl).toMatch(/plan=/);
+    // Navigate back to cart checkout — session now active
+    await customerPage.goto("/en/checkout?cart=1");
+    await expect(customerPage).toHaveURL(/\/en\/checkout\?cart=1/, { timeout: 15_000 });
 
     // ─── STEP E: Create order ───
-    // Now authenticated, should see "Create order" button instead of login form
-    // Scope to main: the header now renders a Sign out <button type="submit">.
-    const createBtn = customerPage.locator("main").getByRole("button", { name: /create order/i });
+    // Authenticated cart checkout shows "Create cart order" button.
+    // Scope to main: the header renders a Sign out <button type="submit">.
+    const createBtn = customerPage.locator("main").getByRole("button", { name: /create cart order|place order/i });
     await expect(createBtn).toBeVisible({ timeout: 10_000 });
     await createBtn.click();
 

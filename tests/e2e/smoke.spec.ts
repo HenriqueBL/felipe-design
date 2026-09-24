@@ -45,8 +45,8 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("h1")).toContainText(/services/i);
 
     // At least one plan card should be visible with price
-    // Cinematic redesign uses article elements; legacy uses .plan-card
-    const planCards = page.locator("article, .cinematic-service-card, .plan-card, [data-plan]");
+    // Semantic selector: article with data-plan-id attribute
+    const planCards = page.locator("article[data-plan-id]");
     await expect(planCards.first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -55,8 +55,8 @@ test.describe("E2E Infrastructure Smoke", () => {
     await expect(page.locator("h1")).toContainText(/serviços/i);
 
     // At least one plan card should be visible
-    // Cinematic redesign uses article elements; legacy uses .plan-card
-    const planCards = page.locator("article, .cinematic-service-card, .plan-card, [data-plan]");
+    // Semantic selector: article with data-plan-id attribute
+    const planCards = page.locator("article[data-plan-id]");
     await expect(planCards.first()).toBeVisible({ timeout: 10_000 });
   });
 
