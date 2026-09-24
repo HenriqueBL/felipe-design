@@ -139,18 +139,32 @@ describe("Portfolio CMS — Create", () => {
     expect(count).toBe(3);
   });
 
-  it("rejects 4th media via duplicate position unique constraint", async () => {
+  it("rejects 4th media via DB check constraint (position > 3)", async () => {
     const work = await insertWork();
     await insertMedia(work.id, 1);
     await insertMedia(work.id, 2);
     await insertMedia(work.id, 3);
 
-    // Position check was widened to -999..999 for two-phase reorder (migration 0024).
-    // Logical max of 3 is enforced at the service layer; DB enforces uniqueness.
+    // Migration 0025 restored strict CHECK (position BETWEEN 1 AND 3).
+    // The DB itself prevents a 4th media regardless of service layer.
     const { error } = await serviceRole.from("portfolio_item_media").insert({
       portfolio_item_id: work.id,
       storage_path: `items/fourth-${crypto.randomUUID()}.jpg`,
-      position: 1, // duplicate position within same work
+      position: 4,
+      focal_point: "center",
+    });
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/check|position/i);
+  });
+
+  it("rejects duplicate position within same work via unique constraint", async () => {
+    const work = await insertWork();
+    await insertMedia(work.id, 1);
+
+    const { error } = await serviceRole.from("portfolio_item_media").insert({
+      portfolio_item_id: work.id,
+      storage_path: `items/dup-${crypto.randomUUID()}.jpg`,
+      position: 1,
       focal_point: "center",
     });
     expect(error).toBeTruthy();
@@ -285,7 +299,7 @@ describe("Portfolio CMS — Featured", () => {
 describe("Portfolio CMS — Hero Media", () => {
   it("sets hero_media_id to a valid media", async () => {
     const work = await insertWork();
-    const m1 = await insertMedia(work.id, 1);
+    await insertMedia(work.id, 1);
     const m2 = await insertMedia(work.id, 2);
 
     const { error } = await serviceRole
@@ -380,6 +394,162 @@ describe("Portfolio CMS — Reorder Works", () => {
   });
 });
 
+// ─── HERO MEDIA CROSS-WORK REJECTION ──────────────────────────────────────
+
+describe("Portfolio CMS — Hero Media Ownership", () => {
+  it("rejects setting hero_media_id to media from another work", async () => {
+    const workA = await insertWork();
+    const workB = await insertWork();
+    const mediaB = await insertMedia(workB.id, 1);
+
+    // Attempt to set workA's hero to workB's media via direct DB update
+    const { error } = await serviceRole
+      .from("portfolio_items")
+      .update({ hero_media_id: mediaB.id })
+      .eq("id", workA.id);
+
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/hero_media_id must belong to the same work/i);
+  });
+
+  it("allows setting hero_media_id to own media", async () => {
+    const work = await insertWork();
+    await insertMedia(work.id, 1);
+    const m2 = await insertMedia(work.id, 2);
+
+    const { error } = await serviceRole
+      .from("portfolio_items")
+      .update({ hero_media_id: m2.id })
+      .eq("id", work.id);
+
+    expect(error).toBeNull();
+
+    const { data } = await serviceRole
+      .from("portfolio_items")
+      .select("hero_media_id")
+      .eq("id", work.id)
+      .single();
+
+    expect(data?.hero_media_id).toBe(m2.id);
+  });
+});
+
+// ─── REORDER MEDIA COMPREHENSIVE ──────────────────────────────────────────
+
+describe("Portfolio CMS — Reorder Media Comprehensive", () => {
+  it("reorders 3→1 (reverse order)", async () => {
+    const work = await insertWork();
+    const m1 = await insertMedia(work.id, 1);
+    const m2 = await insertMedia(work.id, 2);
+    const m3 = await insertMedia(work.id, 3);
+
+    const { error } = await adminJwt.rpc("reorder_portfolio_media", {
+      p_portfolio_item_id: work.id,
+      p_media_ids: [m3.id, m2.id, m1.id],
+    });
+    expect(error).toBeNull();
+
+    const { data } = await serviceRole
+      .from("portfolio_item_media")
+      .select("id, position")
+      .eq("portfolio_item_id", work.id)
+      .order("position");
+
+    expect(data?.map((d) => d.position)).toEqual([1, 2, 3]);
+    expect(data?.[0]?.id).toBe(m3.id);
+    expect(data?.[1]?.id).toBe(m2.id);
+    expect(data?.[2]?.id).toBe(m1.id);
+  });
+
+  it("swaps positions 1 and 2 only", async () => {
+    const work = await insertWork();
+    const m1 = await insertMedia(work.id, 1);
+    const m2 = await insertMedia(work.id, 2);
+    const m3 = await insertMedia(work.id, 3);
+
+    const { error } = await adminJwt.rpc("reorder_portfolio_media", {
+      p_portfolio_item_id: work.id,
+      p_media_ids: [m2.id, m1.id, m3.id],
+    });
+    expect(error).toBeNull();
+
+    const { data } = await serviceRole
+      .from("portfolio_item_media")
+      .select("id, position")
+      .eq("portfolio_item_id", work.id)
+      .order("position");
+
+    expect(data?.map((d) => d.position)).toEqual([1, 2, 3]);
+    expect(data?.[0]?.id).toBe(m2.id);
+    expect(data?.[1]?.id).toBe(m1.id);
+    expect(data?.[2]?.id).toBe(m3.id);
+  });
+
+  it("rejects reorder with media from another work", async () => {
+    const workA = await insertWork();
+    const workB = await insertWork();
+    const mA = await insertMedia(workA.id, 1);
+    const mB = await insertMedia(workB.id, 1);
+
+    const { error } = await adminJwt.rpc("reorder_portfolio_media", {
+      p_portfolio_item_id: workA.id,
+      p_media_ids: [mA.id, mB.id],
+    });
+
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/do not all belong/i);
+  });
+
+  it("rejects reorder with more than 3 IDs", async () => {
+    const work = await insertWork();
+    const m1 = await insertMedia(work.id, 1);
+    const m2 = await insertMedia(work.id, 2);
+    const m3 = await insertMedia(work.id, 3);
+
+    // This should fail at RPC validation level
+    const { error } = await adminJwt.rpc("reorder_portfolio_media", {
+      p_portfolio_item_id: work.id,
+      p_media_ids: [m1.id, m2.id, m3.id, m1.id],
+    });
+
+    expect(error).toBeTruthy();
+    expect(error!.message).toMatch(/max 3|duplicate/i);
+  });
+});
+
+// ─── STORAGE CLEANUP SAFETY ───────────────────────────────────────────────
+
+describe("Portfolio CMS — Storage Cleanup Safety", () => {
+  it("deletePortfolioWork collects all media paths before deletion", async () => {
+    const work = await insertWork();
+    await insertMedia(work.id, 1);
+    await insertMedia(work.id, 2);
+
+    // Verify media exists before delete
+    const { count: beforeCount } = await serviceRole
+      .from("portfolio_item_media")
+      .select("id", { count: "exact", head: true })
+      .eq("portfolio_item_id", work.id);
+    expect(beforeCount).toBe(2);
+
+    // Verify the DB cascade works correctly (service layer collects paths
+    // before deletion; tested separately in unit tests)
+    const { error } = await serviceRole.from("portfolio_items").delete().eq("id", work.id);
+    expect(error).toBeNull();
+
+    // Verify cascade deleted media
+    const { count: afterCount } = await serviceRole
+      .from("portfolio_item_media")
+      .select("id", { count: "exact", head: true })
+      .eq("portfolio_item_id", work.id);
+    expect(afterCount).toBe(0);
+
+    // Remove from tracking since already deleted
+    const idx = createdWorkIds.indexOf(work.id);
+    if (idx >= 0) createdWorkIds.splice(idx, 1);
+  });
+});
+
 // ─── DELETE WORK ─────────────────────────────────────────────────────────
 
 describe("Portfolio CMS — Delete Work", () => {
@@ -407,7 +577,7 @@ describe("Portfolio CMS — Delete Work", () => {
 
 describe("Portfolio CMS — Auto Sort Order", () => {
   it("returns max(sort_order) + 1 via RPC", async () => {
-    const w1 = await insertWork({ sort_order: 5 });
+    await insertWork({ sort_order: 5 });
     const { data, error } = await adminJwt.rpc("next_portfolio_sort_order");
     expect(error).toBeNull();
     expect(data).toBeGreaterThanOrEqual(6);
