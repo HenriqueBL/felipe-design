@@ -53,7 +53,6 @@ export default function CreateOrderForm({
     <form action={formAction}>
       <input type="hidden" name="planId" value={planId} />
       <input type="hidden" name="quantity" value={quantity} />
-      <input type="hidden" name="currency" value={currency} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <button type="submit" className="btn btn-primary" disabled={isPending}>
         {isPending ? labels.creating : labels.createOrder}

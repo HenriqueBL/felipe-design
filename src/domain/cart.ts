@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import type { Currency } from "@/types/database";
-
 export const CART_STORAGE_KEY = "felipe-cart-v1";
 export const CART_MAX_ITEMS = 20;
 export const CART_MAX_QUANTITY_PER_PLAN = 100;
@@ -14,18 +12,21 @@ export const cartItemSchema = z.object({
 
 export type CartItem = z.infer<typeof cartItemSchema>;
 
+// Cart holds INTENT only: planId + quantity per line.
+// Currency is server-authoritative and never stored as authority.
+// Legacy carts with a currency field are accepted during parsing but
+// the currency value is discarded — items are preserved.
 export type Cart = {
-  currency: Currency;
   items: CartItem[];
 };
 
 const rawCartSchema = z.object({
-  currency: z.enum(["BRL", "USD"]),
+  currency: z.enum(["BRL", "USD"]).optional(),
   items: z.array(z.unknown()).default([]),
 });
 
-// The cart holds INTENT only: planId + quantity per line, plus one currency.
-// Prices/totals are never stored here — the server is the sole authority.
+// Pure structural normalizer: deduplicates, caps per-item quantity,
+// and discards any legacy currency field. Items-only output.
 export function normalizeCart(raw: unknown): Cart | null {
   const parsed = rawCartSchema.safeParse(raw);
   if (!parsed.success) {
@@ -57,7 +58,7 @@ export function normalizeCart(raw: unknown): Cart | null {
   if (items.length === 0) {
     return null;
   }
-  return { currency: parsed.data.currency, items };
+  return { items };
 }
 
 /** Pure helper: compute total knives for a set of cart items. */

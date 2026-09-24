@@ -33,9 +33,18 @@ export function resolveMarket(country: string | null | undefined): Market {
 
 /**
  * Extract country from request headers.
- * In dev/test (NODE_ENV !== production): accepts x-test-country for simulation
- * In prod: reads cf-ipcountry ?? x-vercel-ip-country (trusted proxy only)
- * Returns null if no trusted header present or header is spoofable in prod
+ *
+ * PRODUCTION DEFAULT: returns null (en/USD fallback).
+ * Production geo headers are DISABLED until infrastructure is explicitly
+ * configured. To enable, set TRUSTED_GEO_SOURCE=cf-ipcountry (or another
+ * header name that nginx/proxy strips from client requests and injects
+ * from a trusted source). Without this env var, ALL production traffic
+ * falls back to en/USD regardless of any cf-ipcountry or
+ * x-vercel-ip-country header present in the request — preventing spoofed
+ * headers from influencing locale/currency on unconfigured VPS.
+ *
+ * DEV/TEST (NODE_ENV !== "production"): accepts x-test-country for
+ * simulation without requiring real geo infrastructure.
  */
 export function extractCountry(headers: Headers): string | null {
   const isProd = process.env.NODE_ENV === "production";
@@ -48,18 +57,22 @@ export function extractCountry(headers: Headers): string | null {
     }
   }
 
-  // Prod: only trust headers from known proxy infrastructure
-  // cf-ipcountry (Cloudflare) or x-vercel-ip-country (Vercel)
-  const cfCountry = headers.get("cf-ipcountry");
-  if (cfCountry && cfCountry.length === 2) {
-    return cfCountry.toUpperCase();
+  // Production: geo headers are DISABLED by default.
+  // Only read a header if TRUSTED_GEO_SOURCE is explicitly configured,
+  // meaning the operator has confirmed their proxy strips client-supplied
+  // values and injects a trusted one.
+  if (isProd) {
+    const trustedHeader = process.env.TRUSTED_GEO_SOURCE;
+    if (trustedHeader) {
+      const value = headers.get(trustedHeader);
+      if (value && value.length === 2) {
+        return value.toUpperCase();
+      }
+    }
+    // No trusted source configured → fallback
+    return null;
   }
 
-  const vercelCountry = headers.get("x-vercel-ip-country");
-  if (vercelCountry && vercelCountry.length === 2) {
-    return vercelCountry.toUpperCase();
-  }
-
-  // No trusted header available
+  // Non-production fallback (should not reach here, but safety net)
   return null;
 }

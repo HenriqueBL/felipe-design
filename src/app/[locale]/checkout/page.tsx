@@ -74,6 +74,7 @@ export default async function CheckoutPage({
       <CartCheckoutView
         locale={current}
         intlLocale={intlLocale}
+        currency={currency}
         user={user && user.email ? { email: user.email } : null}
         labels={{
           title: dictionary.checkout.title,

@@ -4,6 +4,7 @@ import { extractCountry, resolveMarket } from "@/lib/market";
 import { updateSession } from "@/lib/supabase/middleware";
 
 // Map PT public slugs to internal EN equivalents and vice versa.
+// Supports nested routes: conta/pedidos ↔ account/orders
 const PT_TO_EN: Record<string, string> = {
   servicos: "services",
   sobre: "about",
@@ -17,6 +18,15 @@ const EN_TO_PT: Record<string, string> = Object.fromEntries(
   Object.entries(PT_TO_EN).map(([pt, en]) => [en, pt]),
 );
 
+// Nested sub-segment translations (second slug after locale)
+const PT_SUB_TO_EN: Record<string, Record<string, string>> = {
+  conta: { pedidos: "orders" },
+};
+
+const EN_SUB_TO_PT: Record<string, Record<string, string>> = {
+  account: { orders: "pedidos" },
+};
+
 // Crawler User-Agents that should access both locales without redirect
 // so hreflang/canonical indexing works correctly.
 const CRAWLER_PATTERN = /googlebot|bingbot|yandexbot|duckduckbot|slurp|msnbot|teoma|ask jeeves|crawler|spider|bot\b/i;
@@ -28,7 +38,7 @@ function isCrawler(userAgent: string | null): boolean {
 
 /**
  * Build the equivalent path in a target locale, preserving slug mappings.
- * e.g., /pt/servicos → /en/services, /en/about → /pt/sobre
+ * Handles nested routes: /pt/conta/pedidos/<id> → /en/account/orders/<id>
  */
 function localizePath(pathname: string, targetLocale: string): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -39,14 +49,33 @@ function localizePath(pathname: string, targetLocale: string): string {
     return `/${targetLocale}${pathname}`;
   }
 
-  // Translate first segment after locale if it's a known slug
-  let translatedRest = rest;
+  const translatedRest = [...rest];
+
+  // Translate first segment after locale
   if (rest.length > 0) {
     const firstSlug = rest[0] ?? "";
     if (targetLocale === "en" && PT_TO_EN[firstSlug]) {
-      translatedRest = [PT_TO_EN[firstSlug], ...rest.slice(1)];
+      translatedRest[0] = PT_TO_EN[firstSlug];
     } else if (targetLocale === "pt" && EN_TO_PT[firstSlug]) {
-      translatedRest = [EN_TO_PT[firstSlug], ...rest.slice(1)];
+      translatedRest[0] = EN_TO_PT[firstSlug];
+    }
+
+    // Translate second segment (nested routes like conta/pedidos → account/orders)
+    if (rest.length > 1) {
+      const secondSlug = rest[1] ?? "";
+      if (targetLocale === "en") {
+        const subMap = PT_SUB_TO_EN[firstSlug];
+        if (subMap && subMap[secondSlug]) {
+          translatedRest[1] = subMap[secondSlug];
+        }
+      } else if (targetLocale === "pt") {
+        // After translating first slug to PT, check EN_SUB_TO_PT using original EN slug
+        const enFirstSlug = PT_TO_EN[firstSlug] ?? firstSlug;
+        const subMap = EN_SUB_TO_PT[enFirstSlug];
+        if (subMap && subMap[secondSlug]) {
+          translatedRest[1] = subMap[secondSlug];
+        }
+      }
     }
   }
 
@@ -68,16 +97,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/en", request.url));
   }
 
-  const { response, supabase, user } = await updateSession(request);
-
   const segments = pathname.split("/").filter(Boolean);
   const maybeLocale = segments[0] ?? "";
   if (!isLocale(maybeLocale)) {
+    // Not a localized route — pass through to updateSession
+    const { response } = await updateSession(request);
     return response;
   }
+
   const currentLocale = maybeLocale;
 
-  // Geo-redirect: if human visitor is on wrong locale for their market, redirect
+  // Geo-redirect BEFORE updateSession: if human visitor is on wrong locale,
+  // redirect first. This avoids discarding session cookies set by updateSession
+  // when we immediately return a different redirect response.
   if (!isCrawler(userAgent) && currentLocale !== market.locale) {
     const targetPath = localizePath(pathname, market.locale);
     const url = new URL(targetPath, request.url);
@@ -89,6 +121,9 @@ export async function middleware(request: NextRequest) {
     });
     return NextResponse.redirect(url);
   }
+
+  // Now on correct locale (or crawler) — safe to update session
+  const { response, supabase, user } = await updateSession(request);
 
   // Area do cliente exige autenticacao; o fluxo original e preservado via next.
   // Middleware roda antes dos rewrites, entao cobrimos tambem o caminho publico de PT.

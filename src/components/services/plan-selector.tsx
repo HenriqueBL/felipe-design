@@ -43,10 +43,10 @@ export default function PlanSelector({
     }
   }
 
-  // O carrinho guarda apenas intenção (planId/quantity/currency); o servidor
-  // revalida planos e precos no checkout. Nenhum preco vem do browser.
+  // O carrinho guarda apenas intenção (planId/quantity); moeda e preços são
+  // server-authoritative. Nenhum valor monetário vem do browser.
   function handleAddToCart() {
-    const result = addToCart(planId, quantity, currency);
+    const result = addToCart(planId, quantity);
     if (result.error === "MAX_TOTAL_KNIVES") {
       setAdded(false);
       setLimitError(true);

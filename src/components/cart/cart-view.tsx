@@ -54,7 +54,7 @@ async function fetchCartPricing(
     const response = await fetch("/api/cart-pricing", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items: cart.items, currency: cart.currency }),
+      body: JSON.stringify({ items: cart.items }),
     });
     if (!response.ok) {
       return result;
@@ -93,11 +93,11 @@ export default function CartView({ locale, intlLocale, currency, labels }: CartV
     return unsubscribe;
   }, [refresh]);
 
-  // Currency authority lives in localStorage (cart.currency). The URL-derived
-  // `currency` prop is only a hint for empty-cart "continue shopping" links;
-  // we never hide a populated cart because the URL lacks ?currency=.
+  // Currency is server-authoritative: always use the prop derived from
+  // market resolution, never localStorage. Legacy cart.currency field is
+  // ignored for display purposes.
   const activeCart = cart && cart.items.length > 0 ? cart : null;
-  const displayCurrency = activeCart?.currency ?? currency;
+  const displayCurrency = currency;
 
   if (!loaded) {
     return <section aria-busy="true" />;

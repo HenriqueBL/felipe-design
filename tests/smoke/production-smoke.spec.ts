@@ -24,7 +24,12 @@ async function get(path: string, init?: RequestInit): Promise<Response> {
   if (method !== "GET") {
     throw new Error(`Smoke suite is read-only: ${method} ${path} rejected`);
   }
-  return fetch(url, { redirect: "manual", ...init, method: "GET" });
+  // Geo-lock requires a country header. Smoke tests validate EN locale paths,
+  // so we inject x-test-country: US to ensure the middleware resolves en/USD
+  // instead of redirecting to /pt. In production this header is ignored.
+  const headers = new Headers(init?.headers);
+  headers.set("x-test-country", "US");
+  return fetch(url, { redirect: "manual", ...init, method: "GET", headers });
 }
 
 let homeHtml = "";
