@@ -7,6 +7,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/services/auth";
 import { PORTFOLIO_BUCKET } from "@/services/portfolio";
 import {
+  extractImageDimensions,
+  deletePortfolioObjectIfUnreferenced,
+  setPortfolioPublished,
+} from "@/services/portfolio-cms";
+import {
   createPortfolioWork,
   updatePortfolioWork,
   addPortfolioMedia,
@@ -70,10 +75,25 @@ function revalidatePublicPages(locale: string): void {
   revalidatePath("/" + safeLocale(locale) + "/dashboard/portfolio");
 }
 
-async function uploadPortfolioImage(file: File): Promise<string | null> {
+async function uploadPortfolioImage(
+  file: File,
+): Promise<{ storagePath: string; width: number | null; height: number | null } | null> {
   const validation = validateUploadFile(file.name, file.type, file.size);
   if (!validation.ok) {
     return null;
+  }
+  // Extract dimensions server-side before upload
+  let width: number | null = null;
+  let height: number | null = null;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const dims = await extractImageDimensions(buffer);
+    if (dims) {
+      width = dims.width;
+      height = dims.height;
+    }
+  } catch {
+    // Dimension extraction failure is non-fatal; proceed without dimensions
   }
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const storagePath = `items/${crypto.randomUUID()}.${extension}`;
@@ -84,7 +104,7 @@ async function uploadPortfolioImage(file: File): Promise<string | null> {
   if (error) {
     return null;
   }
-  return storagePath;
+  return { storagePath, width, height };
 }
 
 // ─── Create Work ──────────────────────────────────────────────────────
@@ -127,10 +147,10 @@ export async function createWorkAction(
   }
 
   // Upload all media files first
-  const uploadedMedia: Array<{ storagePath: string }> = [];
+  const uploadedMedia: Array<{ storagePath: string; width: number | null; height: number | null }> = [];
   for (const file of mediaFiles) {
-    const storagePath = await uploadPortfolioImage(file);
-    if (storagePath === null) {
+    const result = await uploadPortfolioImage(file);
+    if (result === null) {
       // Clean up already uploaded files
       const supabase = await createSupabaseServerClient();
       for (const m of uploadedMedia) {
@@ -138,7 +158,7 @@ export async function createWorkAction(
       }
       return { success: false, code: "media_add_failed" };
     }
-    uploadedMedia.push({ storagePath });
+    uploadedMedia.push(result);
   }
 
   try {
@@ -146,7 +166,11 @@ export async function createWorkAction(
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       published: parsed.data.published,
-      media: uploadedMedia,
+      media: uploadedMedia.map((m) => ({
+        storagePath: m.storagePath,
+        width: m.width,
+        height: m.height,
+      })),
     });
 
     revalidatePublicPages(locale);
@@ -221,19 +245,23 @@ export async function addMediaAction(
     return { success: false, code: "invalid_input" };
   }
 
-  const storagePath = await uploadPortfolioImage(file);
-  if (storagePath === null) {
+  const upload = await uploadPortfolioImage(file);
+  if (upload === null) {
     return { success: false, code: "media_add_failed" };
   }
 
   try {
-    const result = await addPortfolioMedia(workId, { storagePath });
+    const result = await addPortfolioMedia(workId, {
+      storagePath: upload.storagePath,
+      width: upload.width,
+      height: upload.height,
+    });
     revalidatePublicPages(locale);
     return { success: true, code: "media_added", data: { id: result.id, position: result.position } };
   } catch {
     // Clean up uploaded file
     const supabase = await createSupabaseServerClient();
-    await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
+    await supabase.storage.from(PORTFOLIO_BUCKET).remove([upload.storagePath]);
     return { success: false, code: "media_add_failed" };
   }
 }
@@ -259,24 +287,26 @@ export async function replaceMediaAction(
     return { success: false, code: "invalid_input" };
   }
 
-  const storagePath = await uploadPortfolioImage(file);
-  if (storagePath === null) {
+  const upload = await uploadPortfolioImage(file);
+  if (upload === null) {
     return { success: false, code: "media_replace_failed" };
   }
 
   try {
-    const result = await replacePortfolioMedia(mediaId, { storagePath });
-    // Clean up old storage path
+    const result = await replacePortfolioMedia(mediaId, {
+      storagePath: upload.storagePath,
+      width: upload.width,
+      height: upload.height,
+    });
+    // Safe storage cleanup for old path — only delete if unreferenced
     if (result.oldStoragePath) {
-      const supabase = await createSupabaseServerClient();
-      await supabase.storage.from(PORTFOLIO_BUCKET).remove([result.oldStoragePath]);
+      await deletePortfolioObjectIfUnreferenced(result.oldStoragePath);
     }
     revalidatePublicPages(locale);
     return { success: true, code: "media_replaced" };
   } catch {
     // Clean up new uploaded file
-    const supabase = await createSupabaseServerClient();
-    await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
+    await deletePortfolioObjectIfUnreferenced(upload.storagePath);
     return { success: false, code: "media_replace_failed" };
   }
 }
@@ -299,9 +329,8 @@ export async function removeMediaAction(
 
   try {
     const result = await removePortfolioMedia(mediaId);
-    // Clean up removed storage path
-    const supabase = await createSupabaseServerClient();
-    await supabase.storage.from(PORTFOLIO_BUCKET).remove([result.removedStoragePath]);
+    // Safe storage cleanup — only delete if unreferenced
+    await deletePortfolioObjectIfUnreferenced(result.removedStoragePath);
     revalidatePublicPages(locale);
     return { success: true, code: "media_removed" };
   } catch {
@@ -512,10 +541,9 @@ export async function deleteWorkAction(
 
   try {
     const result = await deletePortfolioWork(workId);
-    // Clean up all storage paths
-    const supabase = await createSupabaseServerClient();
-    if (result.storagePaths.length > 0) {
-      await supabase.storage.from(PORTFOLIO_BUCKET).remove(result.storagePaths);
+    // Safe storage cleanup — only delete unreferenced objects
+    for (const path of result.storagePaths) {
+      await deletePortfolioObjectIfUnreferenced(path);
     }
     revalidatePublicPages(locale);
     return { success: true, code: "deleted" };
@@ -542,17 +570,7 @@ export async function togglePublishedAction(
   }
 
   try {
-    await updatePortfolioWork(workId, {});
-    // Use direct Supabase update for published toggle since updatePortfolioWork
-    // only handles title/description/focalPoint
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase
-      .from("portfolio_items")
-      .update({ published })
-      .eq("id", workId);
-    if (error) {
-      return { success: false, code: "update_failed" };
-    }
+    await setPortfolioPublished(workId, published);
     revalidatePublicPages(locale);
     return { success: true, code: "updated" };
   } catch {

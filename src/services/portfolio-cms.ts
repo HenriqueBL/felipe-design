@@ -1,4 +1,6 @@
+import sharp from "sharp";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { PORTFOLIO_BUCKET } from "@/lib/portfolio-url";
 import type {
 FocalPoint,
 PortfolioItemMediaRow,
@@ -9,6 +11,57 @@ MAX_MEDIA_PER_WORK,
 isValidFocalPoint,
 computeAspectRatio,
 } from "@/domain/portfolio";
+
+// ─── Image dimension extraction (server-side, authoritative) ──────────
+export async function extractImageDimensions(
+buffer: Buffer,
+): Promise<{ width: number; height: number } | null> {
+try {
+const metadata = await sharp(buffer).metadata();
+if (metadata.width && metadata.height) {
+return { width: metadata.width, height: metadata.height };
+}
+return null;
+} catch {
+return null;
+}
+}
+
+// ─── Safe storage cleanup — only delete when unreferenced ─────────────
+export async function deletePortfolioObjectIfUnreferenced(
+storagePath: string,
+): Promise<boolean> {
+const supabase = await createSupabaseServerClient();
+const { count: mediaCount } = await supabase
+.from("portfolio_item_media")
+.select("id", { count: "exact", head: true })
+.eq("storage_path", storagePath);
+if ((mediaCount ?? 0) > 0) return false;
+const { count: legacyCount } = await supabase
+.from("portfolio_items")
+.select("id", { count: "exact", head: true })
+.or(
+`image_storage_path.eq.${storagePath},before_storage_path.eq.${storagePath},after_storage_path.eq.${storagePath}`,
+);
+if ((legacyCount ?? 0) > 0) return false;
+await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
+return true;
+}
+
+// ─── Published toggle via service layer ───────────────────────────────
+export async function setPortfolioPublished(
+workId: string,
+published: boolean,
+): Promise<void> {
+const supabase = await createSupabaseServerClient();
+const { error } = await supabase
+.from("portfolio_items")
+.update({ published })
+.eq("id", workId);
+if (error) {
+throw new Error("Failed to update published status: " + error.message);
+}
+}
 
 // ─── Domain types for the CMS layer ────────────────────────────────────
 export interface PortfolioMedia {
@@ -433,16 +486,25 @@ const { count } = await supabase
 if ((count ?? 0) <= 1) {
 throw new Error("Cannot remove the last media from a work");
 }
-// Check if this is the hero media — if so, clear hero_media_id
+// Check if this is the hero media — if so, fallback to position 1 remaining media
 const { data: work } = await supabase
 .from("portfolio_items")
 .select("hero_media_id")
 .eq("id", media.portfolio_item_id)
 .maybeSingle();
 if (work?.hero_media_id === mediaId) {
+// Find the first remaining media by position after this one is deleted
+const { data: remaining } = await supabase
+.from("portfolio_item_media")
+.select("id")
+.eq("portfolio_item_id", media.portfolio_item_id)
+.neq("id", mediaId)
+.order("position", { ascending: true })
+.limit(1);
+const newHeroId = remaining?.[0]?.id ?? null;
 await supabase
 .from("portfolio_items")
-.update({ hero_media_id: null })
+.update({ hero_media_id: newHeroId })
 .eq("id", media.portfolio_item_id);
 }
 // Delete the media

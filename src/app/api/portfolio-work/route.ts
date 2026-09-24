@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { z } from "zod";
 import { isAdminUser } from "@/services/auth";
 import { getPortfolioWork } from "@/services/portfolio-cms";
+
+const uuidSchema = z.string().uuid();
 
 export async function GET(request: NextRequest) {
   const admin = await isAdminUser();
@@ -10,8 +12,8 @@ export async function GET(request: NextRequest) {
   }
 
   const id = request.nextUrl.searchParams.get("id");
-  if (!id) {
-    return NextResponse.json({ error: "missing id" }, { status: 400 });
+  if (!id || !uuidSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
 
   try {

@@ -1,9 +1,7 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/services/auth";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { redirect } from "next/navigation";
 import { listPortfolioWorks } from "@/services/portfolio-cms";
-import type { PortfolioWorkSummary } from "@/services/portfolio-cms";
 import { portfolioPublicUrl } from "@/services/portfolio";
 import CmsWorkList from "@/components/dashboard/cms-work-list";
 import CmsWorkEditor from "@/components/dashboard/cms-work-editor";
@@ -17,7 +15,6 @@ export default async function PortfolioAdminPage({
 }) {
   const { locale } = await params;
   const sp = await searchParams;
-  const supabase = await createSupabaseServerClient();
   const admin = await isAdminUser();
   if (!admin) {
     redirect(`/${locale}`);
