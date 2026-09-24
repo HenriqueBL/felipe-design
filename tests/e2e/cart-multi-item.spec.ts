@@ -149,11 +149,16 @@ test.describe("Multi-item Cart Journey", () => {
     await expect(cartItemsAfterOrder).toHaveCount(0, { timeout: 10_000 });
   });
 
-  test("EN currency preservation: services?currency=BRL → cart shows BRL", async ({ page }) => {
-    // Navigate to services with explicit BRL currency
+  test("EN geo-lock: services?currency=BRL → cart shows USD (server-authoritative)", async ({ page }) => {
+    // Navigate to services with explicit BRL currency — geo-lock must ignore it
     await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/services?currency=BRL");
     await expect(page.locator("h1")).toContainText(/services/i);
+
+    // Services page must show USD, not BRL (query param ignored)
+    const servicesContent = await page.content();
+    expect(servicesContent).not.toMatch(/R\$/);
+    expect(servicesContent).toMatch(/\$/);
 
     // Add a plan to cart
     const addToCartButtons = page.locator('button:has-text("Add to cart"), button:has-text("Add")');
@@ -163,7 +168,7 @@ test.describe("Multi-item Cart Journey", () => {
     const badge = page.locator('[data-cart-badge], .cart-badge, a[href*="cart"] span');
     await expect(badge.first()).toContainText("1", { timeout: 5_000 });
 
-    // Navigate to cart WITHOUT currency param — must still show BRL from localStorage
+    // Navigate to cart — must show USD (server-authoritative for US market)
     await page.setExtraHTTPHeaders({ "x-test-country": "US" });
     await page.goto("/en/cart");
     await expect(page).toHaveURL(/\/en\/cart/);
@@ -172,15 +177,10 @@ test.describe("Multi-item Cart Journey", () => {
     const cartItems = page.locator('[data-cart-item], .cart-item, tr[data-item], li[data-item]');
     await expect(cartItems).toHaveCount(1, { timeout: 10_000 });
 
-    // Price must be displayed in BRL format (R$)
-    await expect(page.locator("main")).toContainText(/R\$/, { timeout: 5_000 });
-
-    // Continue Shopping link should preserve BRL
-    const continueLink = page.locator('a:has-text("Continue"), a:has-text("Continuar")');
-    if ((await continueLink.count()) > 0) {
-      const href = await continueLink.first().getAttribute("href");
-      expect(href).toContain("currency=BRL");
-    }
+    // Price must be displayed in USD format ($), NOT BRL (R$)
+    const cartContent = await page.content();
+    expect(cartContent).not.toMatch(/R\$/);
+    expect(cartContent).toMatch(/\$/);
   });
 
   test("PT locale: carrinho multi-item funciona em português", async ({ page }) => {
