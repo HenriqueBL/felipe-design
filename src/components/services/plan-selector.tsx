@@ -6,7 +6,6 @@ import { useState } from "react";
 import { addToCart } from "@/lib/cart-store";
 import type { Locale } from "@/lib/i18n/config";
 import { cartPath } from "@/lib/paths";
-import type { Currency } from "@/types/database";
 
 interface PlanSelectorLabels {
   quantityLabel: string;
@@ -20,7 +19,6 @@ interface PlanSelectorLabels {
 interface PlanSelectorProps {
   locale: Locale;
   planId: string;
-  currency: Currency;
   priceAvailable: boolean;
   labels: PlanSelectorLabels;
 }
@@ -28,7 +26,6 @@ interface PlanSelectorProps {
 export default function PlanSelector({
   locale,
   planId,
-  currency,
   priceAvailable,
   labels,
 }: PlanSelectorProps) {

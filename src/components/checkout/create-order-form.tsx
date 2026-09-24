@@ -3,7 +3,6 @@
 import { useActionState } from "react";
 import { createOrderAction, type CreateOrderResult } from "@/app/[locale]/checkout/actions";
 import type { Locale } from "@/lib/i18n/config";
-import type { Currency } from "@/types/database";
 
 interface CreateOrderFormLabels {
   createOrder: string;
@@ -19,7 +18,6 @@ interface CreateOrderFormProps {
   labels: CreateOrderFormLabels;
   planId: string;
   quantity: number;
-  currency: Currency;
   idempotencyKey: string;
 }
 
@@ -41,7 +39,6 @@ export default function CreateOrderForm({
   labels,
   planId,
   quantity,
-  currency,
   idempotencyKey,
 }: CreateOrderFormProps) {
   const [state, formAction, isPending] = useActionState<CreateOrderResult | null, FormData>(

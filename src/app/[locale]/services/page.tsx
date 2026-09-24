@@ -133,7 +133,6 @@ export default async function ServicesPage({
                       <PlanSelector
                         locale={current}
                         planId={plan.id}
-                        currency={currency}
                         priceAvailable={price !== null}
                         labels={{
                           quantityLabel: dictionary.services.quantityLabel,

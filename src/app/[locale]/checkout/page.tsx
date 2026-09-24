@@ -237,7 +237,6 @@ export default async function CheckoutPage({
                 }}
                 planId={checkoutParams.planId}
                 quantity={checkoutParams.quantity}
-                currency={currency}
                 idempotencyKey={checkoutParams.idempotencyKey}
               />
             </div>
