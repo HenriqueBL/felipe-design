@@ -332,7 +332,7 @@ export async function removeMediaAction(
   }
 
   try {
-    const result = await removePortfolioMedia(mediaId, user.id);
+    const result = await removePortfolioMedia(mediaId);
     revalidatePublicPages(locale);
     // Best-effort storage cleanup after DB success — failure does not affect response
     try {

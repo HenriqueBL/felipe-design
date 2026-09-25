@@ -572,14 +572,17 @@ throw new Error("Failed to replace media: " + error.message);
 return { oldStoragePath: existing.storage_path };
 }
 
+/**
+ * Remove a single media from a portfolio work via the secure atomic RPC.
+ * The RPC uses auth.uid() internally for authorization — no caller-supplied
+ * admin ID is passed. Admin role check is defense-in-depth at the action layer.
+ */
 export async function removePortfolioMedia(
   mediaId: string,
-  adminUserId: string,
 ): Promise<{ removedStoragePath: string; workId: string; newHeroMediaId: string | null }> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("remove_portfolio_media" as never, {
     p_media_id: mediaId,
-    p_admin_user_id: adminUserId,
   } as never);
   if (error) {
     throw new Error(error.message);
