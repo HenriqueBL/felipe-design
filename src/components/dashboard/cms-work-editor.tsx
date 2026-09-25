@@ -241,32 +241,33 @@ export default function CmsWorkEditor({
       alert(labels.cmsMaxMediaReached);
       return;
     }
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp";
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files || files.length === 0) return;
-      const slotsAvailable = MAX_MEDIA_PER_WORK - media.length;
-      const filesToAdd = Array.from(files).slice(0, slotsAvailable);
-      setUploading(true);
-      for (const file of filesToAdd) {
-        const fd = new FormData();
-        fd.append("workId", workId);
-        fd.append("media", file);
-        const result = await addMediaAction(locale, null, fd);
-        if (!result.success) {
-          setStatus(labels.cmsMediaAddFailed);
-          setUploading(false);
-          return;
-        }
+    // Use the persistent hidden file input instead of creating a dynamic one.
+    // This makes the file chooser reliably interceptable by Playwright tests
+    // and avoids race conditions with waitForEvent("filechooser").
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
+  }
+
+  async function handleAddMediaFiles(files: FileList | null) {
+    if (!workId || !files || files.length === 0) return;
+    const slotsAvailable = MAX_MEDIA_PER_WORK - media.length;
+    const filesToAdd = Array.from(files).slice(0, slotsAvailable);
+    if (filesToAdd.length === 0) return;
+    setUploading(true);
+    for (const file of filesToAdd) {
+      const fd = new FormData();
+      fd.append("workId", workId);
+      fd.append("media", file);
+      const result = await addMediaAction(locale, null, fd);
+      if (!result.success) {
+        setStatus(labels.cmsMediaAddFailed);
+        setUploading(false);
+        return;
       }
-      setUploading(false);
-      setStatus(labels.cmsSaved);
-      window.location.reload();
-    };
-    input.click();
+    }
+    setUploading(false);
+    setStatus(labels.cmsSaved);
+    window.location.reload();
   }
 
   async function handleMoveMedia(index: number, direction: -1 | 1) {
@@ -580,20 +581,41 @@ export default function CmsWorkEditor({
           </>
         )}
 
-        {/* Create mode: file input for initial media */}
+        {/* Persistent hidden file input used by both create and edit modes.
+            In create mode it is visible; in edit mode it stays hidden and is
+            triggered by the "Add images" button via handleAddMedia().
+            This avoids creating dynamic inputs that race with Playwright's
+            waitForEvent("filechooser"). */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          onChange={(e) => {
+            if (isCreating) return; // create mode handles files via form submit
+            handleAddMediaFiles(e.target.files);
+            e.target.value = "";
+          }}
+          data-testid="add-media-hidden-input"
+          style={
+            isCreating
+              ? { display: "block" }
+              : {
+                  position: "fixed",
+                  left: "-9999px",
+                  top: 0,
+                  width: "1px",
+                  height: "1px",
+                  opacity: 0.01,
+                }
+          }
+          aria-hidden={!isCreating}
+        />
         {isCreating && (
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
               {labels.cmsAddImages}
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              required
-              style={{ display: "block" }}
-            />
             <p className="note">{labels.cmsUploadHint}</p>
           </div>
         )}

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isAdminUser } from "@/services/auth";
-import { getPortfolioWork } from "@/services/portfolio-cms";
+import { getCurrentUser, isAdminUserAdmin } from "@/services/auth";
+import { getPortfolioWorkAdmin } from "@/services/portfolio-cms";
 
 const uuidSchema = z.string().uuid();
 
 export async function GET(request: NextRequest) {
-  const admin = await isAdminUser();
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const admin = await isAdminUserAdmin(user.id);
   if (!admin) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -17,7 +21,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const work = await getPortfolioWork(id);
+    const work = await getPortfolioWorkAdmin(id);
     if (!work) {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }

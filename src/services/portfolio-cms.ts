@@ -1,5 +1,8 @@
 import sharp from "sharp";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseAdminClient,
+} from "@/lib/supabase/server";
 import { PORTFOLIO_BUCKET } from "@/lib/portfolio-url";
 import type {
 FocalPoint,
@@ -27,24 +30,68 @@ return null;
 }
 }
 
-// ─── Safe storage cleanup — only delete when unreferenced ─────────────
+// ─── Safe storage cleanup — only delete when unreferenced (fail-closed) ─
 export async function deletePortfolioObjectIfUnreferenced(
 storagePath: string,
 ): Promise<boolean> {
 const supabase = await createSupabaseServerClient();
-const { count: mediaCount } = await supabase
+
+// Check portfolio_item_media references — fail closed on error
+const { count: mediaCount, error: mediaError } = await supabase
 .from("portfolio_item_media")
 .select("id", { count: "exact", head: true })
 .eq("storage_path", storagePath);
+if (mediaError) {
+throw new Error(
+"Storage cleanup aborted: failed to check media references: " + mediaError.message,
+);
+}
 if ((mediaCount ?? 0) > 0) return false;
-const { count: legacyCount } = await supabase
+
+// Check legacy portfolio_items references via safe parameterized queries
+const { count: imgCount, error: imgError } = await supabase
 .from("portfolio_items")
 .select("id", { count: "exact", head: true })
-.or(
-`image_storage_path.eq.${storagePath},before_storage_path.eq.${storagePath},after_storage_path.eq.${storagePath}`,
+.eq("image_storage_path", storagePath);
+if (imgError) {
+throw new Error(
+"Storage cleanup aborted: failed to check legacy image references: " + imgError.message,
 );
-if ((legacyCount ?? 0) > 0) return false;
-await supabase.storage.from(PORTFOLIO_BUCKET).remove([storagePath]);
+}
+if ((imgCount ?? 0) > 0) return false;
+
+const { count: beforeCount, error: beforeError } = await supabase
+.from("portfolio_items")
+.select("id", { count: "exact", head: true })
+.eq("before_storage_path", storagePath);
+if (beforeError) {
+throw new Error(
+"Storage cleanup aborted: failed to check legacy before references: " + beforeError.message,
+);
+}
+if ((beforeCount ?? 0) > 0) return false;
+
+const { count: afterCount, error: afterError } = await supabase
+.from("portfolio_items")
+.select("id", { count: "exact", head: true })
+.eq("after_storage_path", storagePath);
+if (afterError) {
+throw new Error(
+"Storage cleanup aborted: failed to check legacy after references: " + afterError.message,
+);
+}
+if ((afterCount ?? 0) > 0) return false;
+
+// Safe to delete — but handle storage errors explicitly
+const { error: removeError } = await supabase.storage
+.from(PORTFOLIO_BUCKET)
+.remove([storagePath]);
+if (removeError) {
+throw new Error(
+"Storage cleanup failed: object still referenced correctly but deletion failed: " +
+removeError.message,
+);
+}
 return true;
 }
 
@@ -165,6 +212,42 @@ coverMedia: cover,
 }
 
 // ─── Read operations ───────────────────────────────────────────────────
+
+/**
+ * Admin-only list using service-role client to bypass RLS.
+ * Use ONLY in admin dashboard pages that already validate admin status via isAdminUser().
+ * The user-scoped client may not receive SSR cookies during RSC rendering in test environments.
+ */
+export async function listPortfolioWorksAdmin(): Promise<PortfolioWorkSummary[]> {
+  const supabase = createSupabaseAdminClient();
+  const { data: items, error } = await supabase
+    .from("portfolio_items")
+    .select("*")
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+  if (error || !items) {
+    throw new Error(
+      "Failed to list portfolio works (admin): " + (error?.message ?? "unknown"),
+    );
+  }
+  const { data: allMedia, error: mediaError } = await supabase
+    .from("portfolio_item_media")
+    .select("*")
+    .order("position", { ascending: true });
+  if (mediaError) {
+    throw new Error("Failed to list portfolio media (admin): " + mediaError.message);
+  }
+  const mediaByItem = new Map<string, PortfolioItemMediaRow[]>();
+  for (const m of allMedia ?? []) {
+    const list = mediaByItem.get(m.portfolio_item_id) ?? [];
+    list.push(m);
+    mediaByItem.set(m.portfolio_item_id, list);
+  }
+  return items.map((item) =>
+    toSummary(toWork(item as PortfolioItemRow, mediaByItem.get(item.id) ?? [])),
+  );
+}
+
 export async function listPortfolioWorks(): Promise<PortfolioWorkSummary[]> {
 const supabase = await createSupabaseServerClient();
 const { data: items, error } = await supabase
@@ -193,6 +276,29 @@ mediaByItem.set(m.portfolio_item_id, list);
 return items.map((item) =>
 toSummary(toWork(item as PortfolioItemRow, mediaByItem.get(item.id) ?? [])),
 );
+}
+
+/**
+ * Admin-only get using service-role client to bypass RLS.
+ * Use ONLY in admin API routes that already validate admin status via isAdminUser().
+ */
+export async function getPortfolioWorkAdmin(id: string): Promise<PortfolioWork | null> {
+const supabase = createSupabaseAdminClient();
+const { data: item, error } = await supabase
+.from("portfolio_items")
+.select("*")
+.eq("id", id)
+.maybeSingle();
+if (error || !item) return null;
+const { data: media, error: mediaError } = await supabase
+.from("portfolio_item_media")
+.select("*")
+.eq("portfolio_item_id", id)
+.order("position", { ascending: true });
+if (mediaError) {
+throw new Error("Failed to load portfolio media (admin): " + mediaError.message);
+}
+return toWork(item as PortfolioItemRow, (media as PortfolioItemMediaRow[]) ?? []);
 }
 
 export async function getPortfolioWork(id: string): Promise<PortfolioWork | null> {
@@ -467,71 +573,27 @@ return { oldStoragePath: existing.storage_path };
 }
 
 export async function removePortfolioMedia(
-mediaId: string,
-): Promise<{ removedStoragePath: string; workId: string }> {
-const supabase = await createSupabaseServerClient();
-const { data: media, error: fetchError } = await supabase
-.from("portfolio_item_media")
-.select("id, portfolio_item_id, storage_path")
-.eq("id", mediaId)
-.maybeSingle();
-if (fetchError || !media) {
-throw new Error("Media not found");
-}
-// Check it's not the last media
-const { count } = await supabase
-.from("portfolio_item_media")
-.select("id", { count: "exact", head: true })
-.eq("portfolio_item_id", media.portfolio_item_id);
-if ((count ?? 0) <= 1) {
-throw new Error("Cannot remove the last media from a work");
-}
-// Check if this is the hero media — if so, fallback to position 1 remaining media
-const { data: work } = await supabase
-.from("portfolio_items")
-.select("hero_media_id")
-.eq("id", media.portfolio_item_id)
-.maybeSingle();
-if (work?.hero_media_id === mediaId) {
-// Find the first remaining media by position after this one is deleted
-const { data: remaining } = await supabase
-.from("portfolio_item_media")
-.select("id")
-.eq("portfolio_item_id", media.portfolio_item_id)
-.neq("id", mediaId)
-.order("position", { ascending: true })
-.limit(1);
-const newHeroId = remaining?.[0]?.id ?? null;
-await supabase
-.from("portfolio_items")
-.update({ hero_media_id: newHeroId })
-.eq("id", media.portfolio_item_id);
-}
-// Delete the media
-const { error: deleteError } = await supabase
-.from("portfolio_item_media")
-.delete()
-.eq("id", mediaId);
-if (deleteError) {
-throw new Error("Failed to remove media: " + deleteError.message);
-}
-// Normalize remaining positions
-const { data: remaining } = await supabase
-.from("portfolio_item_media")
-.select("id")
-.eq("portfolio_item_id", media.portfolio_item_id)
-.order("position", { ascending: true });
-if (remaining && remaining.length > 0) {
-const ids = remaining.map((r) => r.id);
-await supabase.rpc("reorder_portfolio_media" as never, {
-p_portfolio_item_id: media.portfolio_item_id,
-p_media_ids: ids,
-} as never);
-}
-return {
-removedStoragePath: media.storage_path,
-workId: media.portfolio_item_id,
-};
+  mediaId: string,
+  adminUserId: string,
+): Promise<{ removedStoragePath: string; workId: string; newHeroMediaId: string | null }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("remove_portfolio_media" as never, {
+    p_media_id: mediaId,
+    p_admin_user_id: adminUserId,
+  } as never);
+  if (error) {
+    throw new Error(error.message);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not yet in generated types
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) {
+    throw new Error("remove_portfolio_media returned no result");
+  }
+  return {
+    removedStoragePath: row.removed_storage_path as string,
+    workId: row.work_id as string,
+    newHeroMediaId: (row.new_hero_media_id as string | null) ?? null,
+  };
 }
 
 export async function reorderPortfolioMedia(

@@ -82,19 +82,16 @@ async function uploadPortfolioImage(
   if (!validation.ok) {
     return null;
   }
-  // Extract dimensions server-side before upload
-  let width: number | null = null;
-  let height: number | null = null;
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const dims = await extractImageDimensions(buffer);
-    if (dims) {
-      width = dims.width;
-      height = dims.height;
-    }
-  } catch {
-    // Dimension extraction failure is non-fatal; proceed without dimensions
+  // Extract dimensions server-side before upload — mandatory for valid images
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const dims = await extractImageDimensions(buffer);
+  if (!dims || dims.width <= 0 || dims.height <= 0) {
+    // Valid image types (JPEG/PNG/WebP) must produce dimensions via sharp.
+    // Reject upload rather than persisting null dimensions.
+    return null;
   }
+  const width = dims.width;
+  const height = dims.height;
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const storagePath = `items/${crypto.randomUUID()}.${extension}`;
   const supabase = await createSupabaseServerClient();
@@ -327,11 +324,22 @@ export async function removeMediaAction(
     return { success: false, code: "invalid_input" };
   }
 
+  // Get admin user ID for atomic RPC authorization
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, code: "forbidden" };
+  }
+
   try {
-    const result = await removePortfolioMedia(mediaId);
-    // Safe storage cleanup — only delete if unreferenced
-    await deletePortfolioObjectIfUnreferenced(result.removedStoragePath);
+    const result = await removePortfolioMedia(mediaId, user.id);
     revalidatePublicPages(locale);
+    // Best-effort storage cleanup after DB success — failure does not affect response
+    try {
+      await deletePortfolioObjectIfUnreferenced(result.removedStoragePath);
+    } catch (cleanupError) {
+      console.error("[portfolio] Storage cleanup failed after successful DB remove:", cleanupError);
+    }
     return { success: true, code: "media_removed" };
   } catch {
     return { success: false, code: "media_remove_failed" };
