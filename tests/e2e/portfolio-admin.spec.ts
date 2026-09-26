@@ -579,72 +579,74 @@ test.describe("Portfolio Admin E2E", () => {
       .eq("id", workAId!)
       .single()).data?.hero_media_id;
 
-    if (oldHeroId) {
-      // Scope to the exact hero media card using stable data-media-id attribute
-      const heroCard = page.locator(`[data-media-id="${oldHeroId}"]`);
-      await expect(heroCard).toBeVisible({ timeout: 15_000 });
-      const removeHeroBtn = heroCard.locator('[data-testid="remove-media"]');
-      await expect(removeHeroBtn).toBeVisible({ timeout: 15_000 });
+    // Step O is mandatory: hero must exist before removal
+    expect(oldHeroId).toBeTruthy();
+    const confirmedOldHeroId = oldHeroId!;
 
-      // Wait for refreshWork() response BEFORE clicking to avoid race
-      const refreshResponsePromise = page.waitForResponse((response) => {
-        const url = response.url();
-        return (
-          url.includes("/api/portfolio-work") &&
-          url.includes(`id=${workAId}`) &&
-          response.request().method() === "GET" &&
-          response.status() === 200
-        );
-      });
+    // Scope to the exact hero media card using stable data-media-id attribute
+    const heroCard = page.locator(`[data-media-id="${confirmedOldHeroId}"]`);
+    await expect(heroCard).toBeVisible({ timeout: 15_000 });
+    const removeHeroBtn = heroCard.locator('[data-testid="remove-media"]');
+    await expect(removeHeroBtn).toBeVisible({ timeout: 15_000 });
 
-      await removeHeroBtn.click();
-      const refreshResponse = await refreshResponsePromise;
+    // Wait for refreshWork() response BEFORE clicking to avoid race
+    const refreshResponsePromise = page.waitForResponse((response) => {
+      const url = response.url();
+      return (
+        url.includes("/api/portfolio-work") &&
+        url.includes(`id=${workAId}`) &&
+        response.request().method() === "GET" &&
+        response.status() === 200
+      );
+    });
 
-      // Validate API response confirms removal
-      const refreshJson = await refreshResponse.json();
-      expect(refreshJson.heroMediaId).not.toBe(oldHeroId);
-      expect(refreshJson.media.map((m: { id: string }) => m.id)).not.toContain(oldHeroId);
+    await removeHeroBtn.click();
+    const refreshResponse = await refreshResponsePromise;
 
-      // Poll DB until old hero media row is deleted and hero_media_id changed
-      await expect(async () => {
-        const { data: w } = await adminClient
-          .from("portfolio_items")
-          .select("hero_media_id")
-          .eq("id", workAId!)
-          .single();
-        expect(w?.hero_media_id).not.toBe(oldHeroId);
-      }).toPass({ timeout: 30_000 });
+    // Validate API response confirms removal
+    const refreshJson = await refreshResponse.json();
+    expect(refreshJson.heroMediaId).not.toBe(confirmedOldHeroId);
+    expect(refreshJson.media.map((m: { id: string }) => m.id)).not.toContain(confirmedOldHeroId);
 
-      // Confirm old hero row no longer exists
-      const { data: oldHeroRow } = await adminClient
-        .from("portfolio_item_media")
-        .select("id")
-        .eq("id", oldHeroId)
-        .maybeSingle();
-      expect(oldHeroRow).toBeNull();
-
-      // Confirm new hero is the first remaining media by position
-      const { data: remainingMedia } = await adminClient
-        .from("portfolio_item_media")
-        .select("id, position")
-        .eq("portfolio_item_id", workAId!)
-        .order("position");
-      expect(remainingMedia).not.toBeNull();
-      expect(remainingMedia!.length).toBeGreaterThanOrEqual(1);
-
-      const { data: workAfterRemove } = await adminClient
+    // Poll DB until old hero media row is deleted and hero_media_id changed
+    await expect(async () => {
+      const { data: w } = await adminClient
         .from("portfolio_items")
         .select("hero_media_id")
         .eq("id", workAId!)
         .single();
-      expect(workAfterRemove?.hero_media_id).toBe(remainingMedia![0]!.id);
+      expect(w?.hero_media_id).not.toBe(confirmedOldHeroId);
+    }).toPass({ timeout: 30_000 });
 
-      // Verify UI: old hero card gone, new hero card present with .hero class
-      await expect(page.locator(`[data-media-id="${oldHeroId}"]`)).toHaveCount(0, { timeout: 15_000 });
-      const newHeroCard = page.locator(`[data-media-id="${remainingMedia![0]!.id}"]`);
-      await expect(newHeroCard).toBeVisible({ timeout: 15_000 });
-      await expect(newHeroCard).toHaveClass(/hero/);
-    }
+    // Confirm old hero row no longer exists
+    const { data: oldHeroRow } = await adminClient
+      .from("portfolio_item_media")
+      .select("id")
+      .eq("id", confirmedOldHeroId)
+      .maybeSingle();
+    expect(oldHeroRow).toBeNull();
+
+    // Confirm new hero is the first remaining media by position
+    const { data: remainingMedia } = await adminClient
+      .from("portfolio_item_media")
+      .select("id, position")
+      .eq("portfolio_item_id", workAId!)
+      .order("position");
+    expect(remainingMedia).not.toBeNull();
+    expect(remainingMedia!.length).toBeGreaterThanOrEqual(1);
+
+    const { data: workAfterRemove } = await adminClient
+      .from("portfolio_items")
+      .select("hero_media_id")
+      .eq("id", workAId!)
+      .single();
+    expect(workAfterRemove?.hero_media_id).toBe(remainingMedia![0]!.id);
+
+    // Verify UI: old hero card gone, new hero card present with .hero class
+    await expect(page.locator(`[data-media-id="${confirmedOldHeroId}"]`)).toHaveCount(0, { timeout: 15_000 });
+    const newHeroCard = page.locator(`[data-media-id="${remainingMedia![0]!.id}"]`);
+    await expect(newHeroCard).toBeVisible({ timeout: 15_000 });
+    await expect(newHeroCard).toHaveClass(/hero/);
 
     // ── P. FOCAL POINT 3X3 (REAL) ──
     await page.goto(`/en/dashboard/portfolio?edit=${workAId!}`, { waitUntil: "networkidle", timeout: 15_000 });
