@@ -104,6 +104,7 @@ export default function CmsWorkList({
       {works.map((work, index) => (
         <article
           key={work.id}
+          data-work-id={work.id}
           className={`cms-work-card${work.featured ? " featured" : ""}`}
         >
           {work.coverUrl ? (
@@ -166,6 +167,8 @@ export default function CmsWorkList({
                 <button
                   type="button"
                   className="btn-sm btn-secondary"
+                  data-testid="set-featured"
+                  aria-label={labels.cmsSetFeatured}
                   disabled={isPending}
                   onClick={() => handleSetFeatured(work.id)}
                 >
@@ -175,6 +178,8 @@ export default function CmsWorkList({
                 <button
                   type="button"
                   className="btn-sm btn-secondary"
+                  data-testid="clear-featured"
+                  aria-label={labels.cmsClearFeatured}
                   disabled={isPending}
                   onClick={() => handleClearFeatured(work.id)}
                 >

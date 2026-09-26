@@ -119,31 +119,40 @@ export default function CmsWorkEditor({
   const [heroMediaId, setHeroMediaId] = useState<string | null>(null);
   const [focalPoint, setFocalPoint] = useState<FocalPoint>("center");
   const [uploading, setUploading] = useState(false);
+  const [replaceMediaId, setReplaceMediaId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   const isCreating = !workId;
+
+  /** Fetch current work state from API and update React state.
+   *  Used for initial load and after mutations instead of window.location.reload(). */
+  async function refreshWork() {
+    if (!workId) return;
+    try {
+      const res = await fetch(`/api/portfolio-work?id=${workId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTitle(data.title);
+        setDescription(data.description ?? "");
+        setPublished(data.published);
+        setMedia(data.media ?? []);
+        setHeroMediaId(data.heroMediaId);
+        setFocalPoint(data.focalPoint ?? "center");
+      } else {
+        setStatus(labels.cmsUpdateFailed);
+      }
+    } catch {
+      setStatus(labels.cmsUpdateFailed);
+    }
+  }
 
   // Load existing work data when editing
   useEffect(() => {
     if (workId) {
-      startTransition(async () => {
-        try {
-          const res = await fetch(`/api/portfolio-work?id=${workId}`);
-          if (res.ok) {
-            const data = await res.json();
-            setTitle(data.title);
-            setDescription(data.description ?? "");
-            setPublished(data.published);
-            setMedia(data.media ?? []);
-            setHeroMediaId(data.heroMediaId);
-            setFocalPoint(data.focalPoint ?? "center");
-          }
-        } catch {
-          setStatus(labels.cmsUpdateFailed);
-        }
-      });
+      startTransition(() => refreshWork());
     }
-  }, [workId, labels.cmsUpdateFailed]);
+  }, [workId]);
 
   function getMediaUrl(storagePath: string): string {
     return portfolioPublicUrl(supabaseUrl, storagePath);
@@ -195,44 +204,35 @@ export default function CmsWorkEditor({
       if (!result.success) {
         setStatus(labels.cmsMediaRemoveFailed);
       } else {
-        setMedia((prev) => prev.filter((m) => m.id !== mediaId));
-        if (heroMediaId === mediaId) {
-          setHeroMediaId(null);
-        }
+        await refreshWork();
         setStatus(labels.cmsSaved);
       }
     });
   }
 
   function handleReplaceMedia(mediaId: string) {
-    if (!workId || !fileInputRef.current) return;
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setUploading(true);
-      const fd = new FormData();
-      fd.append("mediaId", mediaId);
-      fd.append("media", file);
-      const result = await replaceMediaAction(locale, null, fd);
-      setUploading(false);
-      if (!result.success) {
-        setStatus(labels.cmsMediaReplaceFailed);
-      } else {
-        // Refresh media list
-        setMedia((prev) =>
-          prev.map((m) =>
-            m.id === mediaId ? { ...m, storagePath: "refreshed" } : m
-          )
-        );
-        setStatus(labels.cmsSaved);
-        // Force reload to get actual new path
-        window.location.reload();
-      }
-    };
-    input.click();
+    if (!workId || !replaceFileInputRef.current) return;
+    setReplaceMediaId(mediaId);
+    replaceFileInputRef.current.value = "";
+    replaceFileInputRef.current.click();
+  }
+
+  async function handleReplaceMediaFile(files: FileList | null) {
+    if (!workId || !replaceMediaId || !files || files.length === 0) return;
+    const file = files[0]!;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("mediaId", replaceMediaId);
+    fd.append("media", file);
+    const result = await replaceMediaAction(locale, null, fd);
+    setUploading(false);
+    if (!result.success) {
+      setStatus(labels.cmsMediaReplaceFailed);
+    } else {
+      await refreshWork();
+      setStatus(labels.cmsSaved);
+    }
+    setReplaceMediaId(null);
   }
 
   function handleAddMedia() {
@@ -266,8 +266,8 @@ export default function CmsWorkEditor({
       }
     }
     setUploading(false);
+    await refreshWork();
     setStatus(labels.cmsSaved);
-    window.location.reload();
   }
 
   async function handleMoveMedia(index: number, direction: -1 | 1) {
@@ -289,8 +289,8 @@ export default function CmsWorkEditor({
       if (!result.success) {
         setStatus(labels.cmsReorderFailed);
       } else {
+        await refreshWork();
         setStatus(labels.cmsSaved);
-        window.location.reload();
       }
     });
   }
@@ -331,6 +331,9 @@ export default function CmsWorkEditor({
       if (!result.success) {
         setStatus(isCreating ? labels.cmsCreateFailed : labels.cmsUpdateFailed);
       } else {
+        if (!isCreating) {
+          await refreshWork();
+        }
         setStatus(labels.cmsSaved);
         if (isCreating && result.data?.id) {
           window.location.href = `/${locale}/dashboard/portfolio?edit=${result.data.id}`;
@@ -412,6 +415,7 @@ export default function CmsWorkEditor({
               {sortedMedia.map((m, idx) => (
                 <div
                   key={m.id}
+                  data-media-id={m.id}
                   className={`cms-media-card${heroMediaId === m.id ? " hero" : ""}`}
                 >
                   <Image
@@ -431,6 +435,8 @@ export default function CmsWorkEditor({
                       {heroMediaId !== m.id && (
                         <button
                           type="button"
+                          data-testid="set-hero"
+                          aria-label={labels.cmsSetHero}
                           onClick={() => handleSetHero(m.id)}
                           disabled={isPending}
                           title={labels.cmsSetHero}
@@ -460,6 +466,8 @@ export default function CmsWorkEditor({
                       )}
                       <button
                         type="button"
+                        data-testid="replace-media"
+                        aria-label={labels.cmsReplace}
                         onClick={() => handleReplaceMedia(m.id)}
                         disabled={isPending || uploading}
                       >
@@ -467,6 +475,8 @@ export default function CmsWorkEditor({
                       </button>
                       <button
                         type="button"
+                        data-testid="remove-media"
+                        aria-label={labels.cmsRemove}
                         onClick={() => handleRemoveMedia(m.id)}
                         disabled={isPending || sortedMedia.length <= 1}
                       >
@@ -492,6 +502,15 @@ export default function CmsWorkEditor({
             <p className="note" style={{ marginBottom: 20 }}>
               {labels.cmsUploadHint}
             </p>
+
+            {/* Hidden persistent input for Replace Media */}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              ref={replaceFileInputRef}
+              onChange={(e) => handleReplaceMediaFile(e.target.files)}
+              style={{ display: "none" }}
+            />
 
             {/* Focal Point Selector */}
             <div style={{ marginBottom: 20 }}>
