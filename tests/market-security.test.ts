@@ -28,21 +28,60 @@ describe("extractCountry — production security", () => {
     expect(extractCountry(h)).toBeNull();
   });
 
-  it("reads TRUSTED_GEO_SOURCE header in production when explicitly configured", () => {
+  it("reads x-origin-country in production when TRUSTED_GEO_SOURCE=x-origin-country", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-origin-country");
+    const h = new Headers();
+    h.set("x-origin-country", "BR");
+    expect(extractCountry(h)).toBe("BR");
+  });
+
+  it("rejects TRUSTED_GEO_SOURCE=cf-ipcountry in production (returns null)", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("TRUSTED_GEO_SOURCE", "cf-ipcountry");
     const h = new Headers();
     h.set("cf-ipcountry", "BR");
-    expect(extractCountry(h)).toBe("BR");
+    expect(extractCountry(h)).toBeNull();
   });
 
-  it("does NOT read other headers when TRUSTED_GEO_SOURCE is set to a specific header", () => {
+  it("rejects TRUSTED_GEO_SOURCE=x-vercel-ip-country in production (returns null)", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("TRUSTED_GEO_SOURCE", "cf-ipcountry");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-vercel-ip-country");
     const h = new Headers();
-    // Only cf-ipcountry is trusted; x-vercel-ip-country is ignored
     h.set("x-vercel-ip-country", "BR");
     expect(extractCountry(h)).toBeNull();
+  });
+
+  it("ignores cf-ipcountry when TRUSTED_GEO_SOURCE=x-origin-country and only cf-ipcountry present", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-origin-country");
+    const h = new Headers();
+    h.set("cf-ipcountry", "BR");
+    expect(extractCountry(h)).toBeNull();
+  });
+
+  it("ignores x-vercel-ip-country when TRUSTED_GEO_SOURCE=x-origin-country and only x-vercel-ip-country present", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-origin-country");
+    const h = new Headers();
+    h.set("x-vercel-ip-country", "BR");
+    expect(extractCountry(h)).toBeNull();
+  });
+
+  it("returns null for invalid x-origin-country value (wrong length)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-origin-country");
+    const h = new Headers();
+    h.set("x-origin-country", "BRA");
+    expect(extractCountry(h)).toBeNull();
+  });
+
+  it("resolves US correctly via x-origin-country", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRUSTED_GEO_SOURCE", "x-origin-country");
+    const h = new Headers();
+    h.set("x-origin-country", "US");
+    expect(extractCountry(h)).toBe("US");
   });
 
   it("spoofed cf-ipcountry in production without TRUSTED_GEO_SOURCE → null → en/USD", () => {

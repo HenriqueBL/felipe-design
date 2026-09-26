@@ -174,3 +174,69 @@ Regras:
   existente local, health-check pós-rollback.
 
 Ambos idempotentes e sem secrets hardcoded.
+
+## Production Geo Trust
+
+Market resolution (locale + currency) is determined server-side from the
+visitor's country. BR → pt/BRL; everywhere else → en/USD. There is no
+public currency or language selector.
+
+### Default behavior (geo disabled)
+
+Without `TRUSTED_GEO_SOURCE`, `extractCountry()` returns `null` and all
+traffic resolves to en/USD. This is the safe default for fresh deployments
+or when the trust boundary is not yet configured. Removing the variable
+at any time restores this fallback without code changes or redeployment
+beyond the env update.
+
+### Intended production architecture
+
+```
+Visitor → Cloudflare proxy → CF-IPCountry header
+       → nginx (strips client geo headers, overwrites X-Origin-Country)
+       → Next.js (TRUSTED_GEO_SOURCE=x-origin-country)
+       → resolveMarket() → locale + currency
+```
+
+The application trusts **only** the internal `X-Origin-Country` header
+written by nginx. It never trusts public-facing headers like
+`CF-IPCountry`, `X-Vercel-Ip-Country`, or `X-Test-Country` directly,
+because internet clients can forge those.
+
+### Trust requirement
+
+`TRUSTED_GEO_SOURCE` must NOT be enabled until direct-origin bypass is
+prevented. If a client can reach the VPS IP directly (bypassing
+Cloudflare), they could inject `X-Origin-Country` unless nginx strips it
+from non-proxy requests. The activation order below ensures this cannot
+happen.
+
+### Public headers are untrusted
+
+Never configure the app to directly trust:
+
+- `cf-ipcountry` — forged by any HTTP client when DNS-only or direct-access
+- `x-vercel-ip-country` — same; Vercel-specific header irrelevant here
+- `x-test-country` — dev/test only; ignored in production by code design
+
+The production env validator rejects any `TRUSTED_GEO_SOURCE` value other
+than `x-origin-country`.
+
+### Activation order
+
+1. Repository hardening (this branch) — app accepts only `x-origin-country`
+2. Origin trust configured — nginx strips all client-supplied geo headers
+   (`cf-ipcountry`, `x-vercel-ip-country`, `x-test-country`,
+   `x-origin-country`) and overwrites `X-Origin-Country` from upstream
+3. Cloudflare proxy enabled and validated — orange cloud on A/CNAME records,
+   SSL Full (Strict), confirm `CF-IPCountry` is injected
+4. Direct-origin bypass blocked — firewall restricts ports 80/443 to
+   Cloudflare IP ranges; nginx rejects requests without CF signature
+5. Only then: add `TRUSTED_GEO_SOURCE=x-origin-country` to `.env.production`
+6. Redeploy container
+7. Validate: BR visitor → /pt + R$; non-BR visitor → /en + $
+
+### Rollback
+
+Removing `TRUSTED_GEO_SOURCE` from `.env.production` and redeploying
+restores safe en/USD fallback immediately. No code rollback required.

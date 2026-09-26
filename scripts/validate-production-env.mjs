@@ -47,6 +47,18 @@ export function validateProductionEnv(env) {
     errors.push("ENABLE_MOCK_PAYMENTS must NOT be true in production");
   }
 
+  // TRUSTED_GEO_SOURCE is optional (geo disabled = safe en/USD fallback).
+  // When set in production, ONLY "x-origin-country" is accepted — this is
+  // the internal header written by nginx after validating upstream geo data.
+  // Public-facing headers like cf-ipcountry or x-vercel-ip-country must
+  // NEVER be trusted directly, as internet clients can forge them.
+  if (isProduction) {
+    const geoSource = env.TRUSTED_GEO_SOURCE;
+    if (typeof geoSource === "string" && geoSource.trim() !== "" && geoSource.trim() !== "x-origin-country") {
+      errors.push("Invalid value for TRUSTED_GEO_SOURCE (only 'x-origin-country' is accepted in production; unset to disable geo)");
+    }
+  }
+
   return errors;
 }
 
