@@ -25,6 +25,7 @@
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "0.33.5",
     "stripe": "^22.6.2",
     "tus-js-client": "^4.3.1",
     "zod": "^3.24.1"
@@ -44,5 +45,9 @@
     "supabase": "^2.117.0",
     "typescript": "^5.7.2",
     "vitest": "^3.0.0"
+  },
+  "allowScripts": {
+    "sharp@0.35.4": true,
+    "sharp@0.33.5": true
   }
 }

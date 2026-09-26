@@ -4,13 +4,19 @@ import { getDictionary } from "@/lib/i18n/dictionaries";
 import { defaultLocale, isLocale, type Locale } from "@/lib/i18n/config";
 import { servicesPath, galleryPath, aboutPath } from "@/lib/paths";
 import { publicPath, siteUrl } from "@/lib/site";
+import { portfolioPublicUrl } from "@/lib/portfolio-url";
 import {
-  getFeaturedPortfolioItem,
-  listPublishedPortfolioItems,
-  portfolioPublicUrl,
+  getFeaturedPortfolioWork,
+  listPublishedPortfolioWorks,
+  resolveHeroMedia,
+  resolveCoverMedia,
 } from "@/services/portfolio";
 import { listActivePlans, type ActivePlan } from "@/services/plans";
 import { formatMoney } from "@/lib/format";
+import {
+  focalPointToObjectPosition,
+  getMediaOrientation,
+} from "@/domain/portfolio";
 
 // Fallback versionado do hero: a Home nunca quebra por falta de destaque.
 const HERO_FALLBACK_SRC = "/home/hero-fallback.svg";
@@ -30,8 +36,8 @@ export default async function HomePage({
   // Portfolio services degrade to null/[] on failure; listActivePlans may throw.
   // Promise.allSettled isolates failures so the Home page never 500s.
   const [featuredResult, publishedResult, plansResult] = await Promise.allSettled([
-    getFeaturedPortfolioItem(),
-    listPublishedPortfolioItems(),
+    getFeaturedPortfolioWork(),
+    listPublishedPortfolioWorks(),
     listActivePlans(),
   ]);
 
@@ -43,13 +49,32 @@ export default async function HomePage({
   const plans: ActivePlan[] =
     plansResult.status === "fulfilled" ? plansResult.value : [];
 
-  // Uses resolvedMediaPath (image → after → before) to support new and legacy
-  // items without artificially duplicating paths.
+  // ── Adaptive Hero resolution ──────────────────────────────────────────
+  const heroMedia = featured ? resolveHeroMedia(featured) : null;
   const heroSrc =
-    featured && featured.resolvedMediaPath && supabaseUrl
-      ? portfolioPublicUrl(supabaseUrl, featured.resolvedMediaPath)
+    heroMedia && supabaseUrl
+      ? portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)
       : HERO_FALLBACK_SRC;
   const heroAlt = featured ? featured.title : dictionary.home.heroTitle;
+
+  // Determine orientation ONLY when both dimensions are valid positive numbers.
+  // Unknown dimensions → safe contain/editorial mode (never assume landscape).
+  const heroOrientation =
+    heroMedia && heroMedia.width && heroMedia.height
+      ? getMediaOrientation(heroMedia.width, heroMedia.height)
+      : "unknown";
+
+  const heroFocalPosition = featured
+    ? focalPointToObjectPosition(featured.focalPoint)
+    : "center center";
+
+  // Layout class drives CSS: landscape uses cover overlay; portrait/square/unknown
+  // use editorial split layout with contain to avoid destructive crop.
+  const heroLayoutClass =
+    heroOrientation === "landscape"
+      ? "cinematic-hero--landscape"
+      : "cinematic-hero--editorial";
+
   const currency = current === "pt" ? "BRL" : "USD";
   const intlLocale = current === "pt" ? "pt-BR" : "en-US";
 
@@ -69,21 +94,43 @@ export default async function HomePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
 
-      {/* ─── CINEMATIC HERO ─────────────────────────────────────── */}
-      <section className="cinematic-hero">
-        <div className="cinematic-hero-media">
-          <Image
-            src={heroSrc}
-            alt={heroAlt}
-            fill
-            priority
-            sizes="100vw"
-            className="cinematic-hero-img"
-            style={{ objectFit: "cover", objectPosition: "center 30%" }}
-          />
-          <div className="cinematic-hero-overlay" aria-hidden="true" />
-          <div className="cinematic-hero-gradient" aria-hidden="true" />
-        </div>
+      {/* ─── CINEMATIC HERO (adaptive) ─────────────────────────────────── */}
+      <section className={`cinematic-hero ${heroLayoutClass}`}>
+        {heroOrientation === "landscape" ? (
+          /* LANDSCAPE: full-bleed cover with focal-aware positioning */
+          <div className="cinematic-hero-media">
+            <Image
+              src={heroSrc}
+              alt={heroAlt}
+              fill
+              priority
+              sizes="100vw"
+              className="cinematic-hero-img"
+              style={{
+                objectFit: "cover",
+                objectPosition: heroFocalPosition,
+              }}
+            />
+            <div className="cinematic-hero-overlay" aria-hidden="true" />
+            <div className="cinematic-hero-gradient" aria-hidden="true" />
+          </div>
+        ) : (
+          /* PORTRAIT / SQUARE / UNKNOWN: editorial stage with contain */
+          <div className="cinematic-hero-editorial-stage">
+            <div className="cinematic-hero-editorial-media">
+              <Image
+                src={heroSrc}
+                alt={heroAlt}
+                fill
+                priority
+                sizes="(max-width: 900px) 100vw, 50vw"
+                className="cinematic-hero-editorial-img"
+                style={{ objectFit: "contain" }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="container cinematic-hero-content">
           <p className="cinematic-eyebrow">
             {dictionary.home.heroEyebrow}
@@ -102,7 +149,7 @@ export default async function HomePage({
       </section>
 
       {/* ─── FEATURED WORK ──────────────────────────────────────── */}
-      {featured && (
+      {featured && heroMedia && (
         <section className="section cinematic-featured-work">
           <div className="container">
             <p className="section-eyebrow">
@@ -110,15 +157,27 @@ export default async function HomePage({
             </p>
             <div className="cinematic-featured-grid">
               <div className="cinematic-featured-image">
-                {featured.resolvedMediaPath && supabaseUrl && (
+                {heroMedia.width && heroMedia.height ? (
                   <Image
-                    src={portfolioPublicUrl(supabaseUrl, featured.resolvedMediaPath)}
+                    src={portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)}
                     alt={featured.title}
-                    width={900}
-                    height={600}
+                    width={heroMedia.width}
+                    height={heroMedia.height}
                     sizes="(max-width: 900px) 100vw, 900px"
                     className="cinematic-featured-img"
+                    style={{ objectFit: "contain" }}
                   />
+                ) : (
+                  <div className="cinematic-featured-stage">
+                    <Image
+                      src={portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)}
+                      alt={featured.title}
+                      fill
+                      sizes="(max-width: 900px) 100vw, 900px"
+                      className="cinematic-featured-img"
+                      style={{ objectFit: "contain" }}
+                    />
+                  </div>
                 )}
               </div>
               <div className="cinematic-featured-text">
@@ -207,21 +266,37 @@ export default async function HomePage({
             </p>
             <h2>{dictionary.home.selectedWorkTitle}</h2>
             <div className="cinematic-gallery-grid">
-              {selectedWork.map((item) => (
-                <figure key={item.id} className="cinematic-gallery-item">
-                  {item.resolvedMediaPath && supabaseUrl && (
-                    <Image
-                      src={portfolioPublicUrl(supabaseUrl, item.resolvedMediaPath)}
-                      alt={item.title}
-                      width={600}
-                      height={400}
-                      sizes="(max-width: 600px) 100vw, 600px"
-                      className="cinematic-gallery-img"
-                    />
-                  )}
-                  <figcaption>{item.title}</figcaption>
-                </figure>
-              ))}
+              {selectedWork.map((work) => {
+                const cover = resolveCoverMedia(work);
+                if (!cover || !supabaseUrl) return null;
+                return (
+                  <figure key={work.id} className="cinematic-gallery-item">
+                    {cover.width && cover.height ? (
+                      <Image
+                        src={portfolioPublicUrl(supabaseUrl, cover.storagePath)}
+                        alt={work.title}
+                        width={cover.width}
+                        height={cover.height}
+                        sizes="(max-width: 600px) 100vw, 600px"
+                        className="cinematic-gallery-img"
+                        style={{ objectFit: "contain" }}
+                      />
+                    ) : (
+                      <div className="cinematic-gallery-stage">
+                        <Image
+                          src={portfolioPublicUrl(supabaseUrl, cover.storagePath)}
+                          alt={work.title}
+                          fill
+                          sizes="(max-width: 600px) 100vw, 600px"
+                          className="cinematic-gallery-img"
+                          style={{ objectFit: "contain" }}
+                        />
+                      </div>
+                    )}
+                    <figcaption>{work.title}</figcaption>
+                  </figure>
+                );
+              })}
             </div>
             <div className="cinematic-gallery-cta">
               <Link href={galleryPath(current)} className="btn btn-secondary">

@@ -1,117 +1,187 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { PORTFOLIO_BUCKET, portfolioPublicUrl } from "@/lib/portfolio-url";
-import type { PortfolioItemRow } from "@/types/database";
+import type { FocalPoint } from "@/types/database";
 
 export { PORTFOLIO_BUCKET, portfolioPublicUrl };
 
-export interface PublicPortfolioItem {
+// ─── Public read-model types (Phase 3: Work + Media) ──────────────────────
+
+export interface PublicPortfolioMedia {
+  id: string;
+  storagePath: string;
+  position: number;
+  width: number | null;
+  height: number | null;
+  aspectRatio: number | null;
+  altText: string | null;
+}
+
+export interface PublicPortfolioWork {
   id: string;
   title: string;
   description: string | null;
-  imageStoragePath: string | null;
-  beforeStoragePath: string | null;
-  afterStoragePath: string | null;
-  /** Caminho de mídia resolvido para renderização (hero, gallery, thumb). */
-  resolvedMediaPath: string | null;
   featured: boolean;
   sortOrder: number;
+  heroMediaId: string | null;
+  focalPoint: FocalPoint;
+  media: PublicPortfolioMedia[];
 }
 
-/**
- * Resolve a imagem principal de um item do portfolio com fallback seguro:
- * 1. image_storage_path (modelo novo)
- * 2. after_storage_path (legacy: resultado final)
- * 3. before_storage_path (legacy: último recurso)
- * Retorna null quando o item não possui nenhuma mídia válida.
- */
-export function resolvePortfolioMedia(item: {
-  imageStoragePath: string | null;
-  beforeStoragePath: string | null;
-  afterStoragePath: string | null;
-}): string | null {
-  return (
-    item.imageStoragePath ??
-    item.afterStoragePath ??
-    item.beforeStoragePath ??
-    null
-  );
+// ─── Mappers ──────────────────────────────────────────────────────────────
+
+interface MediaRow {
+  id: string;
+  storage_path: string;
+  position: number;
+  width: number | null;
+  height: number | null;
+  aspect_ratio: number | null;
+  alt_text: string | null;
 }
 
-function toPublicItem(row: PortfolioItemRow): PublicPortfolioItem {
-  const item = {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    imageStoragePath: row.image_storage_path,
-    beforeStoragePath: row.before_storage_path,
-    afterStoragePath: row.after_storage_path,
-    featured: row.featured,
-    sortOrder: row.sort_order,
-  };
+interface ItemRow {
+  id: string;
+  title: string;
+  description: string | null;
+  published: boolean;
+  featured: boolean;
+  sort_order: number;
+  hero_media_id: string | null;
+  focal_point: FocalPoint;
+}
+
+function toPublicMedia(row: MediaRow): PublicPortfolioMedia {
   return {
-    ...item,
-    resolvedMediaPath: resolvePortfolioMedia(item),
+    id: row.id,
+    storagePath: row.storage_path,
+    position: row.position,
+    width: row.width,
+    height: row.height,
+    aspectRatio: row.aspect_ratio,
+    altText: row.alt_text,
   };
 }
 
+function toPublicWork(
+  item: ItemRow,
+  mediaRows: MediaRow[],
+): PublicPortfolioWork {
+  const sorted = [...mediaRows].sort((a, b) => a.position - b.position);
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    featured: item.featured,
+    sortOrder: item.sort_order,
+    heroMediaId: item.hero_media_id,
+    focalPoint: item.focal_point,
+    media: sorted.map(toPublicMedia),
+  };
+}
+
+// ─── Hero media resolution ────────────────────────────────────────────────
+
 /**
- * Item destaque publicado para o hero da Home.
- * Retorna null quando nao ha destaque, destaque despublicado ou
- * banco indisponivel — a Home nunca deve quebrar por falta da foto.
+ * Resolve the canonical hero media for a Work:
+ * 1. child whose id === work.heroMediaId
+ * 2. fallback: child at position 1
+ * 3. fallback: first child by position
+ * 4. null if no media exists
  */
-export async function getFeaturedPortfolioItem(): Promise<PublicPortfolioItem | null> {
+export function resolveHeroMedia(
+  work: PublicPortfolioWork,
+): PublicPortfolioMedia | null {
+  if (work.media.length === 0) return null;
+  if (work.heroMediaId) {
+    const hero = work.media.find((m) => m.id === work.heroMediaId);
+    if (hero) return hero;
+  }
+  const pos1 = work.media.find((m) => m.position === 1);
+  if (pos1) return pos1;
+  return work.media[0] ?? null;
+}
+
+/**
+ * Resolve cover/thumbnail media for card-level rendering.
+ * Same priority as hero but used in smaller contexts.
+ */
+export function resolveCoverMedia(
+  work: PublicPortfolioWork,
+): PublicPortfolioMedia | null {
+  return resolveHeroMedia(work);
+}
+
+// ─── Public queries ───────────────────────────────────────────────────────
+
+/**
+ * Featured published Work with child media for the Home Hero.
+ * Returns null when no featured work exists or on failure — the Home
+ * must never break due to missing portfolio data.
+ */
+export async function getFeaturedPortfolioWork(): Promise<PublicPortfolioWork | null> {
   try {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase
+    const { data: item, error } = await supabase
       .from("portfolio_items")
-      .select("*")
+      .select("id, title, description, featured, sort_order, hero_media_id, focal_point")
       .eq("published", true)
       .eq("featured", true)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (error || !data) {
-      return null;
-    }
-    return toPublicItem(data);
+    if (error || !item) return null;
+
+    const { data: mediaRows, error: mediaError } = await supabase
+      .from("portfolio_item_media")
+      .select("id, storage_path, position, width, height, aspect_ratio, alt_text")
+      .eq("portfolio_item_id", item.id)
+      .order("position", { ascending: true });
+    if (mediaError) return null;
+
+    return toPublicWork(item as ItemRow, (mediaRows as MediaRow[]) ?? []);
   } catch {
     return null;
   }
 }
 
 /**
- * Itens publicados, ordenados por sort_order (fallback: created_at desc).
- * Em caso de indisponibilidade do banco, retorna lista vazia — a Gallery
- * mostra o estado vazio em vez de erro 500.
+ * All published Works with child media, ordered by sort_order ASC
+ * (fallback: created_at DESC). Returns [] on failure so the Gallery
+ * shows an empty state instead of a 500.
  */
-export async function listPublishedPortfolioItems(): Promise<PublicPortfolioItem[]> {
+export async function listPublishedPortfolioWorks(): Promise<PublicPortfolioWork[]> {
   try {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase
+    const { data: items, error } = await supabase
       .from("portfolio_items")
-      .select("*")
+      .select("id, title, description, featured, sort_order, hero_media_id, focal_point")
       .eq("published", true)
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
-    if (error) {
-      return [];
+    if (error || !items) return [];
+
+    const ids = items.map((i) => i.id);
+    const { data: allMedia, error: mediaError } =
+      ids.length > 0
+        ? await supabase
+            .from("portfolio_item_media")
+            .select("id, portfolio_item_id, storage_path, position, width, height, aspect_ratio, alt_text")
+            .in("portfolio_item_id", ids)
+            .order("position", { ascending: true })
+        : { data: [], error: null };
+    if (mediaError) return [];
+
+    const mediaByItem = new Map<string, MediaRow[]>();
+    for (const m of (allMedia as (MediaRow & { portfolio_item_id: string })[]) ?? []) {
+      const list = mediaByItem.get(m.portfolio_item_id) ?? [];
+      list.push(m);
+      mediaByItem.set(m.portfolio_item_id, list);
     }
-    return (data ?? []).map(toPublicItem);
+
+    return items.map((item) =>
+      toPublicWork(item as ItemRow, mediaByItem.get(item.id) ?? []),
+    );
   } catch {
     return [];
   }
-}
-
-/** Todos os itens (admin): inclui drafts, ordenacao de edicao. */
-export async function listAllPortfolioItems(): Promise<PortfolioItemRow[]> {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("portfolio_items")
-    .select("*")
-    .order("sort_order", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
-  if (error) {
-    throw new Error("Failed to list portfolio items: " + error.message);
-  }
-  return data ?? [];
 }

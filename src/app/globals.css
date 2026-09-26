@@ -245,6 +245,155 @@ a:hover {
   overflow: hidden;
 }
 
+/* ─── Adaptive Hero: Editorial mode (portrait/square/unknown) ───── */
+.cinematic-hero--editorial {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  padding: 120px 0 80px;
+  background: var(--bg);
+}
+
+.cinematic-hero-editorial-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.cinematic-hero-editorial-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.cinematic-hero-editorial-img {
+  object-fit: contain !important;
+}
+
+@media (max-width: 900px) {
+  .cinematic-hero--editorial {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 100px 0 60px;
+  }
+
+  .cinematic-hero-editorial-stage {
+    aspect-ratio: 3 / 4;
+    max-height: 60vh;
+  }
+}
+
+/* ─── Public Gallery: Work-level editorial compositions ────────── */
+.gallery-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 80px;
+}
+
+.gallery-work {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gallery-work-caption {
+  max-width: 680px;
+}
+
+.gallery-work-title {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  margin: 0 0 8px;
+  color: var(--text-strong);
+}
+
+.gallery-work-desc {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* 1 media: single protagonist stage */
+.gallery-work--1 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.gallery-work--1 .gallery-work-angle {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* 2 media: balanced dual stage */
+.gallery-work--2 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* 3 media desktop: Angle1 large left, Angle2/3 stacked right with equal height */
+.gallery-work--3 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+}
+
+.gallery-work--3 .gallery-work-angle-1 {
+  grid-row: span 2;
+}
+
+.gallery-work--3 .gallery-work-angle-2,
+.gallery-work--3 .gallery-work-angle-3 {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.gallery-work-angle {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.gallery-work-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.gallery-work-contain-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.gallery-work-img-contain {
+  object-fit: contain !important;
+}
+
+@media (max-width: 900px) {
+  .gallery-work--2 .gallery-work-media,
+  .gallery-work--3 .gallery-work-media {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-work--3 .gallery-work-angle-1 {
+    grid-row: auto;
+  }
+
+  .gallery-grid {
+    gap: 48px;
+  }
+}
+
 .cinematic-hero-media {
   position: absolute;
   inset: 0;
@@ -366,6 +515,16 @@ a:hover {
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-card);
+}
+
+/* Stable containing block for Image fill when CMS dimensions are unknown */
+.cinematic-featured-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .cinematic-featured-img {
@@ -512,6 +671,16 @@ a:hover {
   overflow: hidden;
   position: relative;
   background: var(--surface);
+}
+
+/* Stable containing block for Image fill when CMS dimensions are unknown */
+.cinematic-gallery-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .cinematic-gallery-img {
@@ -1290,6 +1459,375 @@ textarea {
 .badge.awaiting_photos {
   background: rgba(224, 161, 60, 0.12);
   color: var(--accent);
+}
+
+/* ─── Phase 2 — Portfolio CMS Admin ───────────────────────────── */
+.cms-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cms-work-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.cms-work-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  position: relative;
+}
+
+.cms-work-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+
+.cms-work-card.featured {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.cms-work-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-2);
+}
+
+.cms-work-body {
+  padding: 16px;
+}
+
+.cms-work-title {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  margin: 0 0 6px;
+  color: var(--text-strong);
+}
+
+.cms-work-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cms-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cms-badge.featured {
+  background: rgba(201, 151, 72, 0.18);
+  color: var(--accent);
+}
+
+.cms-badge.published {
+  background: rgba(127, 176, 105, 0.15);
+  color: #7fb069;
+}
+
+.cms-badge.draft {
+  background: rgba(163, 154, 143, 0.15);
+  color: var(--muted);
+}
+
+.cms-badge.media-count {
+  background: rgba(100, 149, 237, 0.12);
+  color: #6495ed;
+}
+
+.cms-work-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cms-work-actions .btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  min-height: 32px;
+}
+
+/* Editor panel */
+.cms-editor {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.cms-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cms-editor-title {
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.cms-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.cms-media-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+  position: relative;
+}
+
+.cms-media-card.hero {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.cms-media-img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  display: block;
+  background: var(--bg);
+}
+
+.cms-media-label {
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cms-media-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cms-media-actions button {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  min-height: 28px;
+}
+
+/* Focal Point 3x3 Grid */
+.cms-focal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 120px;
+  height: 120px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.cms-focal-cell {
+  border: none;
+  background: transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-base);
+  padding: 0;
+}
+
+.cms-focal-cell::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--transition-base), transform var(--transition-base);
+}
+
+.cms-focal-cell:hover::after {
+  background: var(--muted);
+}
+
+.cms-focal-cell.active::after {
+  background: var(--accent);
+  transform: scale(1.4);
+}
+
+.cms-focal-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Preview panels */
+.cms-preview-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.cms-preview-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+}
+
+.cms-gallery-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.cms-gallery-preview.layout-1 img {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  display: block;
+}
+
+.cms-gallery-preview.layout-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.cms-gallery-preview.layout-2 img {
+  width: 100%;
+  height: 300px;
+  object-fit: contain;
+}
+
+.cms-gallery-preview.layout-3 {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.cms-gallery-preview.layout-3 .angle-1 {
+  grid-row: span 2;
+}
+
+.cms-gallery-preview.layout-3 img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  min-height: 150px;
+}
+
+.cms-hero-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 21 / 9;
+  background: var(--bg);
+  max-height: 300px;
+}
+
+.cms-hero-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cms-hero-preview.landscape img {
+  object-fit: cover;
+}
+
+.cms-hero-preview.portrait img,
+.cms-hero-preview.square img {
+  object-fit: contain;
+}
+
+/* Upload area */
+.cms-upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+.cms-upload-area:hover,
+.cms-upload-area.dragover {
+  border-color: var(--accent);
+  background: rgba(201, 151, 72, 0.05);
+}
+
+.cms-upload-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+/* Responsive CMS */
+@media (max-width: 1100px) {
+  .cms-work-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .cms-media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .cms-gallery-preview.layout-3 {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .cms-gallery-preview.layout-3 .angle-1 {
+    grid-row: auto;
+  }
+
+  .cms-gallery-preview.layout-3 img {
+    max-height: 250px;
+  }
+}
+
+@media (max-width: 800px) {
+  .cms-editor {
+    padding: 16px;
+  }
+
+  .cms-work-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-hero-preview {
+    aspect-ratio: 16 / 9;
+  }
 }
 
 .badge.in_queue {

@@ -107,7 +107,12 @@ export async function authenticateWithSSR(
     })),
   );
 
-  // Navigate to trigger middleware session recognition
-  await page.goto("/en");
+  // Navigate to an admin-protected page to trigger middleware session recognition
+  // without leaving the dashboard context. The previous approach of navigating to
+  // /en caused public-page redirects that lost the session; skipping navigation
+  // entirely caused RSC to not receive cookies on the first admin page load.
+  // /en/dashboard is protected by middleware (requires auth + admin role), so it
+  // validates the session and primes the cookie jar for subsequent navigations.
+  await page.goto("/en/dashboard");
   await page.waitForLoadState("networkidle");
 }

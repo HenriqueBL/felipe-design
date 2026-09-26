@@ -210,6 +210,50 @@ export type OrderRevisionUpdate = {
   notes?: string | null;
 };
 
+export type FocalPoint =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "center-left"
+  | "center"
+  | "center-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+export type PortfolioItemMediaRow = {
+  id: string;
+  portfolio_item_id: string;
+  storage_path: string;
+  position: number;
+  width: number | null;
+  height: number | null;
+  aspect_ratio: number | null;
+  alt_text: string | null;
+  focal_point: FocalPoint;
+  created_at: string;
+};
+export type PortfolioItemMediaInsert = {
+  id?: string;
+  portfolio_item_id: string;
+  storage_path: string;
+  position: number;
+  width?: number | null;
+  height?: number | null;
+  aspect_ratio?: number | null;
+  alt_text?: string | null;
+  focal_point?: FocalPoint;
+};
+export type PortfolioItemMediaUpdate = {
+  storage_path?: string;
+  position?: number;
+  width?: number | null;
+  height?: number | null;
+  aspect_ratio?: number | null;
+  alt_text?: string | null;
+  focal_point?: FocalPoint;
+};
+
 export type PortfolioItemRow = {
   id: string;
   title: string;
@@ -220,6 +264,8 @@ export type PortfolioItemRow = {
   published: boolean;
   featured: boolean;
   sort_order: number;
+  hero_media_id: string | null;
+  focal_point: FocalPoint;
   created_at: string;
 };
 export type PortfolioItemInsert = {
@@ -232,6 +278,8 @@ export type PortfolioItemInsert = {
   published?: boolean;
   featured?: boolean;
   sort_order?: number;
+  hero_media_id?: string | null;
+  focal_point?: FocalPoint;
 };
 export type PortfolioItemUpdate = {
   title?: string;
@@ -242,6 +290,8 @@ export type PortfolioItemUpdate = {
   published?: boolean;
   featured?: boolean;
   sort_order?: number;
+  hero_media_id?: string | null;
+  focal_point?: FocalPoint;
 };
 
 export type PaymentRow = {
@@ -396,7 +446,8 @@ export type Database = {
       order_items: { Row: OrderItemRow; Insert: OrderItemInsert; Update: OrderItemUpdate; Relationships: [] };
       order_images: { Row: OrderImageRow; Insert: OrderImageInsert; Update: OrderImageUpdate; Relationships: [] };
       order_revisions: { Row: OrderRevisionRow; Insert: OrderRevisionInsert; Update: OrderRevisionUpdate; Relationships: [] };
-      portfolio_items: { Row: PortfolioItemRow; Insert: PortfolioItemInsert; Update: PortfolioItemUpdate; Relationships: [] };
+      portfolio_items: { Row: PortfolioItemRow; Insert: PortfolioItemInsert; Update: PortfolioItemUpdate; Relationships: [{ foreignKeyName: "portfolio_items_hero_media_id_fkey"; columns: ["hero_media_id"]; isOneToOne: false; referencedRelation: "portfolio_item_media"; referencedColumns: ["id"] }] };
+      portfolio_item_media: { Row: PortfolioItemMediaRow; Insert: PortfolioItemMediaInsert; Update: PortfolioItemMediaUpdate; Relationships: [{ foreignKeyName: "portfolio_item_media_portfolio_item_id_fkey"; columns: ["portfolio_item_id"]; isOneToOne: false; referencedRelation: "portfolio_items"; referencedColumns: ["id"] }] };
       payments: { Row: PaymentRow; Insert: PaymentInsert; Update: PaymentUpdate; Relationships: [] };
       payment_events: { Row: PaymentEventRow; Insert: PaymentEventInsert; Update: PaymentEventUpdate; Relationships: [] };
       affiliates: { Row: AffiliateRow; Insert: AffiliateInsert; Update: AffiliateUpdate; Relationships: [] };
@@ -535,6 +586,18 @@ export type Database = {
       set_order_status: {
         Args: { p_order_id: string; p_status: OrderStatus };
         Returns: OrderRow;
+      };
+      next_portfolio_sort_order: {
+        Args: never;
+        Returns: number;
+      };
+      reorder_portfolio_works: {
+        Args: { work_ids: string[] };
+        Returns: void;
+      };
+      reorder_portfolio_media: {
+        Args: { p_portfolio_item_id: string; p_media_ids: string[] };
+        Returns: void;
       };
     };
     Enums: {
