@@ -161,4 +161,45 @@ describe("validateProductionEnv", () => {
       "Missing required environment variable: NEXT_PUBLIC_SITE_URL",
     ]);
   });
+
+  it("passes when TRUSTED_GEO_SOURCE is absent (geo disabled)", () => {
+    expect(validateProductionEnv(validBaseEnv)).toEqual([]);
+  });
+
+  it("passes when TRUSTED_GEO_SOURCE=x-origin-country", () => {
+    expect(
+      validateProductionEnv({
+        ...validBaseEnv,
+        TRUSTED_GEO_SOURCE: "x-origin-country",
+      })
+    ).toEqual([]);
+  });
+
+  it("rejects TRUSTED_GEO_SOURCE=cf-ipcountry in production", () => {
+    const errors = validateProductionEnv({
+      ...validBaseEnv,
+      TRUSTED_GEO_SOURCE: "cf-ipcountry",
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("TRUSTED_GEO_SOURCE");
+    expect(errors[0]).toContain("x-origin-country");
+  });
+
+  it("rejects TRUSTED_GEO_SOURCE=x-vercel-ip-country in production", () => {
+    const errors = validateProductionEnv({
+      ...validBaseEnv,
+      TRUSTED_GEO_SOURCE: "x-vercel-ip-country",
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("TRUSTED_GEO_SOURCE");
+  });
+
+  it("rejects arbitrary TRUSTED_GEO_SOURCE values in production", () => {
+    const errors = validateProductionEnv({
+      ...validBaseEnv,
+      TRUSTED_GEO_SOURCE: "random-header",
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("TRUSTED_GEO_SOURCE");
+  });
 });
