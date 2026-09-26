@@ -517,6 +517,16 @@ a:hover {
   box-shadow: var(--shadow-card);
 }
 
+/* Stable containing block for Image fill when CMS dimensions are unknown */
+.cinematic-featured-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
 .cinematic-featured-img {
   width: 100%;
   height: auto;
@@ -661,6 +671,16 @@ a:hover {
   overflow: hidden;
   position: relative;
   background: var(--surface);
+}
+
+/* Stable containing block for Image fill when CMS dimensions are unknown */
+.cinematic-gallery-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .cinematic-gallery-img {

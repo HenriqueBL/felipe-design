@@ -234,35 +234,16 @@ test.describe("Public Portfolio (Phase 3)", () => {
   });
 
   test("gallery stacks vertically on mobile without overflow", async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await authenticateWithSSR(page, adminEmail, adminPassword);
     const adminClient = getAdminClient();
 
-    const existingWorks = await adminClient
-      .from("portfolio_items")
-      .select("id, title")
-      .eq("published", true)
-      .limit(5);
-
-    let hasThreeMedia = false;
-    for (const w of existingWorks.data ?? []) {
-      const { count } = await adminClient
-        .from("portfolio_item_media")
-        .select("id", { count: "exact", head: true })
-        .eq("portfolio_item_id", w.id);
-      if ((count ?? 0) >= 3) {
-        hasThreeMedia = true;
-        break;
-      }
-    }
-
-    if (!hasThreeMedia) {
-      await createWorkWithMedia(page, adminClient, "Mobile Test 3 Media", [
-        { w: 1600, h: 900 },
-        { w: 900, h: 1200 },
-        { w: 1000, h: 1000 },
-      ]);
-    }
+    // MANDATORY: create a deterministic 3-media fixture for this test
+    await createWorkWithMedia(page, adminClient, "Mobile Stack Strict 3 Media", [
+      { w: 1600, h: 900 },
+      { w: 900, h: 1200 },
+      { w: 1000, h: 1000 },
+    ]);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/en/gallery", { waitUntil: "networkidle", timeout: 30_000 });
@@ -270,26 +251,26 @@ test.describe("Public Portfolio (Phase 3)", () => {
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
     expect(bodyWidth).toBeLessThanOrEqual(390);
 
-    const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: /3 Media|Mobile Test/ }).first();
-    if ((await threeMediaArticle.count()) > 0) {
-      const angles = threeMediaArticle.locator(".gallery-work-angle");
-      const count = await angles.count();
-      if (count >= 3) {
-        const box1 = await angles.nth(0).boundingBox();
-        const box2 = await angles.nth(1).boundingBox();
-        const box3 = await angles.nth(2).boundingBox();
+    // MANDATORY assertion: fixture must exist and have exactly 3 angles
+    const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: "Mobile Stack Strict 3 Media" });
+    await expect(threeMediaArticle).toBeVisible({ timeout: 15_000 });
 
-        expect(box1).not.toBeNull();
-        expect(box2).not.toBeNull();
-        expect(box3).not.toBeNull();
-        expect(box2!.y).toBeGreaterThan(box1!.y);
-        expect(box3!.y).toBeGreaterThan(box2!.y);
+    const angles = threeMediaArticle.locator(".gallery-work-angle");
+    await expect(angles).toHaveCount(3, { timeout: 10_000 });
 
-        expect(box1!.x + box1!.width).toBeLessThanOrEqual(390);
-        expect(box2!.x + box2!.width).toBeLessThanOrEqual(390);
-        expect(box3!.x + box3!.width).toBeLessThanOrEqual(390);
-      }
-    }
+    const box1 = await angles.nth(0).boundingBox();
+    const box2 = await angles.nth(1).boundingBox();
+    const box3 = await angles.nth(2).boundingBox();
+
+    expect(box1).not.toBeNull();
+    expect(box2).not.toBeNull();
+    expect(box3).not.toBeNull();
+    expect(box2!.y).toBeGreaterThan(box1!.y);
+    expect(box3!.y).toBeGreaterThan(box2!.y);
+
+    expect(box1!.x + box1!.width).toBeLessThanOrEqual(390);
+    expect(box2!.x + box2!.width).toBeLessThanOrEqual(390);
+    expect(box3!.x + box3!.width).toBeLessThanOrEqual(390);
 
     await page.setViewportSize({ width: 1280, height: 720 });
   });
@@ -502,70 +483,51 @@ test.describe("Public Portfolio (Phase 3)", () => {
   });
 
   test("gallery geometry at viewports 1440/1100/900/390", async ({ page }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(300_000);
     await authenticateWithSSR(page, adminEmail, adminPassword);
     const adminClient = getAdminClient();
 
-    // Ensure a 3-media work exists for geometry testing
-    const existingWorks = await adminClient
-      .from("portfolio_items")
-      .select("id")
-      .eq("published", true)
-      .limit(10);
+    // MANDATORY: create a deterministic 3-media fixture for this test
+    await createWorkWithMedia(page, adminClient, "Viewport Geo Strict 3 Media", [
+      { w: 1600, h: 900 },
+      { w: 900, h: 1200 },
+      { w: 1000, h: 1000 },
+    ]);
 
-    let hasThreeMedia = false;
-    for (const w of existingWorks.data ?? []) {
-      const { count } = await adminClient
-        .from("portfolio_item_media")
-        .select("id", { count: "exact", head: true })
-        .eq("portfolio_item_id", w.id);
-      if ((count ?? 0) >= 3) {
-        hasThreeMedia = true;
-        break;
-      }
-    }
-
-    if (!hasThreeMedia) {
-      await createWorkWithMedia(page, adminClient, "Viewport Geo 3 Media", [
-        { w: 1600, h: 900 },
-        { w: 900, h: 1200 },
-        { w: 1000, h: 1000 },
-      ]);
-    }
-
-    // Desktop viewports: 1440 and 1100 should show 3-media desktop geometry
+    // Desktop viewports: 1440 and 1100 must show 3-media desktop geometry
     for (const vp of [{ width: 1440, height: 900 }, { width: 1100, height: 800 }]) {
       await page.setViewportSize(vp);
       await page.goto("/en/gallery", { waitUntil: "networkidle", timeout: 30_000 });
 
-      const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: /3 Media|Viewport Geo/ }).first();
-      if ((await threeMediaArticle.count()) > 0) {
-        const angles = threeMediaArticle.locator(".gallery-work-angle");
-        const angleCount = await angles.count();
-        if (angleCount >= 3) {
-          await angles.nth(0).scrollIntoViewIfNeeded();
-          await angles.nth(2).scrollIntoViewIfNeeded();
+      // MANDATORY: fixture must exist
+      const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: "Viewport Geo Strict 3 Media" });
+      await expect(threeMediaArticle).toBeVisible({ timeout: 15_000 });
 
-          const box1 = await angles.nth(0).boundingBox();
-          const box2 = await angles.nth(1).boundingBox();
-          const box3 = await angles.nth(2).boundingBox();
+      // MANDATORY: exactly 3 angles
+      const angles = threeMediaArticle.locator(".gallery-work-angle");
+      await expect(angles).toHaveCount(3, { timeout: 10_000 });
 
-          expect(box1).not.toBeNull();
-          expect(box2).not.toBeNull();
-          expect(box3).not.toBeNull();
+      await angles.nth(0).scrollIntoViewIfNeeded();
+      await angles.nth(2).scrollIntoViewIfNeeded();
 
-          // Angle 1 area > Angle 2 and 3
-          const area1 = box1!.width * box1!.height;
-          const area2 = box2!.width * box2!.height;
-          const area3 = box3!.width * box3!.height;
-          expect(area1).toBeGreaterThan(area2);
-          expect(area1).toBeGreaterThan(area3);
+      const box1 = await angles.nth(0).boundingBox();
+      const box2 = await angles.nth(1).boundingBox();
+      const box3 = await angles.nth(2).boundingBox();
 
-          // Angle 2 and 3 equal within 2px
-          expect(Math.abs(box2!.width - box3!.width)).toBeLessThanOrEqual(2);
-          expect(Math.abs(box2!.height - box3!.height)).toBeLessThanOrEqual(2);
-        }
-      }
+      expect(box1).not.toBeNull();
+      expect(box2).not.toBeNull();
+      expect(box3).not.toBeNull();
+
+      // Angle 1 area > Angle 2 and 3
+      const area1 = box1!.width * box1!.height;
+      const area2 = box2!.width * box2!.height;
+      const area3 = box3!.width * box3!.height;
+      expect(area1).toBeGreaterThan(area2);
+      expect(area1).toBeGreaterThan(area3);
+
+      // Angle 2 and 3 equal within 2px
+      expect(Math.abs(box2!.width - box3!.width)).toBeLessThanOrEqual(2);
+      expect(Math.abs(box2!.height - box3!.height)).toBeLessThanOrEqual(2);
 
       // No horizontal overflow
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
@@ -579,9 +541,9 @@ test.describe("Public Portfolio (Phase 3)", () => {
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(bodyWidth).toBeLessThanOrEqual(900);
 
-      const workArticles = page.locator("article.gallery-work");
-      const count = await workArticles.count();
-      expect(count).toBeGreaterThan(0);
+      // MANDATORY: fixture must still render at this breakpoint
+      const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: "Viewport Geo Strict 3 Media" });
+      await expect(threeMediaArticle).toBeVisible({ timeout: 15_000 });
     }
 
     // 390px: stack vertically, no overflow
@@ -591,27 +553,126 @@ test.describe("Public Portfolio (Phase 3)", () => {
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(bodyWidth).toBeLessThanOrEqual(390);
 
-      const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: /3 Media|Viewport Geo/ }).first();
-      if ((await threeMediaArticle.count()) > 0) {
-        const angles = threeMediaArticle.locator(".gallery-work-angle");
-        const angleCount = await angles.count();
-        if (angleCount >= 3) {
-          const box1 = await angles.nth(0).boundingBox();
-          const box2 = await angles.nth(1).boundingBox();
-          const box3 = await angles.nth(2).boundingBox();
+      // MANDATORY: fixture must exist and have exactly 3 stacked angles
+      const threeMediaArticle = page.locator("article.gallery-work").filter({ hasText: "Viewport Geo Strict 3 Media" });
+      await expect(threeMediaArticle).toBeVisible({ timeout: 15_000 });
 
-          expect(box1).not.toBeNull();
-          expect(box2).not.toBeNull();
-          expect(box3).not.toBeNull();
-          // Stacked: y1 < y2 < y3
-          expect(box2!.y).toBeGreaterThan(box1!.y);
-          expect(box3!.y).toBeGreaterThan(box2!.y);
-        }
-      }
+      const angles = threeMediaArticle.locator(".gallery-work-angle");
+      await expect(angles).toHaveCount(3, { timeout: 10_000 });
+
+      const box1 = await angles.nth(0).boundingBox();
+      const box2 = await angles.nth(1).boundingBox();
+      const box3 = await angles.nth(2).boundingBox();
+
+      expect(box1).not.toBeNull();
+      expect(box2).not.toBeNull();
+      expect(box3).not.toBeNull();
+      // Stacked: y1 < y2 < y3
+      expect(box2!.y).toBeGreaterThan(box1!.y);
+      expect(box3!.y).toBeGreaterThan(box2!.y);
     }
 
     // Reset viewport
     await page.setViewportSize({ width: 1280, height: 720 });
+  });
+
+  test("unknown featured work renders stable cinematic-featured-stage", async ({ page }) => {
+    test.setTimeout(180_000);
+    await authenticateWithSSR(page, adminEmail, adminPassword);
+    const adminClient = getAdminClient();
+
+    await clearAllFeatured(adminClient);
+
+    // Create a valid featured work, then nullify its dimensions
+    const unknownFeaturedId = await createWorkWithMedia(
+      page, adminClient, "Unknown Featured Stage Test", [{ w: 1200, h: 800 }], true,
+    );
+
+    await adminClient
+      .from("portfolio_item_media")
+      .update({ width: null, height: null })
+      .eq("portfolio_item_id", unknownFeaturedId);
+
+    // Verify dimensions are null
+    const { data: mediaRow } = await adminClient
+      .from("portfolio_item_media")
+      .select("width, height")
+      .eq("portfolio_item_id", unknownFeaturedId)
+      .limit(1)
+      .single();
+    expect(mediaRow?.width).toBeNull();
+    expect(mediaRow?.height).toBeNull();
+
+    await page.goto("/en", { waitUntil: "networkidle", timeout: 30_000 });
+
+    // MANDATORY: cinematic-featured-stage must exist and be visible
+    const stage = page.locator(".cinematic-featured-stage");
+    await expect(stage).toBeVisible({ timeout: 15_000 });
+
+    // Stage must have non-zero bounding box (proves CSS provides stable layout)
+    const stageBox = await stage.boundingBox();
+    expect(stageBox).not.toBeNull();
+    expect(stageBox!.width).toBeGreaterThan(0);
+    expect(stageBox!.height).toBeGreaterThan(0);
+
+    // Image inside must be visible and use contain
+    const img = stage.locator("img");
+    await expect(img).toBeVisible({ timeout: 10_000 });
+    const objectFit = await img.evaluate((el) => window.getComputedStyle(el).objectFit);
+    expect(objectFit).toBe("contain");
+  });
+
+  test("unknown selected work renders stable cinematic-gallery-stage", async ({ page }) => {
+    test.setTimeout(180_000);
+    await authenticateWithSSR(page, adminEmail, adminPassword);
+    const adminClient = getAdminClient();
+
+    // Create a published work with nullified dimensions for Selected Work
+    const unknownSelectedId = await createWorkWithMedia(
+      page, adminClient, "Unknown Selected Stage Test", [{ w: 1200, h: 800 }], false,
+    );
+
+    await adminClient
+      .from("portfolio_item_media")
+      .update({ width: null, height: null })
+      .eq("portfolio_item_id", unknownSelectedId);
+
+    // Ensure it appears in Selected Work by giving it a low sort_order
+    await adminClient
+      .from("portfolio_items")
+      .update({ sort_order: 0 })
+      .eq("id", unknownSelectedId);
+
+    // Verify dimensions are null
+    const { data: mediaRow } = await adminClient
+      .from("portfolio_item_media")
+      .select("width, height")
+      .eq("portfolio_item_id", unknownSelectedId)
+      .limit(1)
+      .single();
+    expect(mediaRow?.width).toBeNull();
+    expect(mediaRow?.height).toBeNull();
+
+    await page.goto("/en", { waitUntil: "networkidle", timeout: 30_000 });
+
+    // MANDATORY: find the specific work's figure and its stage
+    const workFigure = page.locator("figure.cinematic-gallery-item").filter({ hasText: "Unknown Selected Stage Test" });
+    await expect(workFigure).toBeVisible({ timeout: 15_000 });
+
+    const stage = workFigure.locator(".cinematic-gallery-stage");
+    await expect(stage).toBeVisible({ timeout: 10_000 });
+
+    // Stage must have non-zero bounding box
+    const stageBox = await stage.boundingBox();
+    expect(stageBox).not.toBeNull();
+    expect(stageBox!.width).toBeGreaterThan(0);
+    expect(stageBox!.height).toBeGreaterThan(0);
+
+    // Image inside must be visible and use contain
+    const img = stage.locator("img");
+    await expect(img).toBeVisible({ timeout: 10_000 });
+    const objectFit = await img.evaluate((el) => window.getComputedStyle(el).objectFit);
+    expect(objectFit).toBe("contain");
   });
 
   test("public rendering works without legacy storage fields", async ({ page }) => {
