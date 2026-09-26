@@ -157,15 +157,28 @@ export default async function HomePage({
             </p>
             <div className="cinematic-featured-grid">
               <div className="cinematic-featured-image">
-                <Image
-                  src={portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)}
-                  alt={featured.title}
-                  width={heroMedia.width ?? 900}
-                  height={heroMedia.height ?? 600}
-                  sizes="(max-width: 900px) 100vw, 900px"
-                  className="cinematic-featured-img"
-                  style={{ objectFit: "contain" }}
-                />
+                {heroMedia.width && heroMedia.height ? (
+                  <Image
+                    src={portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)}
+                    alt={featured.title}
+                    width={heroMedia.width}
+                    height={heroMedia.height}
+                    sizes="(max-width: 900px) 100vw, 900px"
+                    className="cinematic-featured-img"
+                    style={{ objectFit: "contain" }}
+                  />
+                ) : (
+                  <div className="cinematic-featured-stage">
+                    <Image
+                      src={portfolioPublicUrl(supabaseUrl, heroMedia.storagePath)}
+                      alt={featured.title}
+                      fill
+                      sizes="(max-width: 900px) 100vw, 900px"
+                      className="cinematic-featured-img"
+                      style={{ objectFit: "contain" }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="cinematic-featured-text">
                 <h2>{featured.title}</h2>
@@ -258,15 +271,28 @@ export default async function HomePage({
                 if (!cover || !supabaseUrl) return null;
                 return (
                   <figure key={work.id} className="cinematic-gallery-item">
-                    <Image
-                      src={portfolioPublicUrl(supabaseUrl, cover.storagePath)}
-                      alt={work.title}
-                      width={cover.width ?? 600}
-                      height={cover.height ?? 400}
-                      sizes="(max-width: 600px) 100vw, 600px"
-                      className="cinematic-gallery-img"
-                      style={{ objectFit: "contain" }}
-                    />
+                    {cover.width && cover.height ? (
+                      <Image
+                        src={portfolioPublicUrl(supabaseUrl, cover.storagePath)}
+                        alt={work.title}
+                        width={cover.width}
+                        height={cover.height}
+                        sizes="(max-width: 600px) 100vw, 600px"
+                        className="cinematic-gallery-img"
+                        style={{ objectFit: "contain" }}
+                      />
+                    ) : (
+                      <div className="cinematic-gallery-stage">
+                        <Image
+                          src={portfolioPublicUrl(supabaseUrl, cover.storagePath)}
+                          alt={work.title}
+                          fill
+                          sizes="(max-width: 600px) 100vw, 600px"
+                          className="cinematic-gallery-img"
+                          style={{ objectFit: "contain" }}
+                        />
+                      </div>
+                    )}
                     <figcaption>{work.title}</figcaption>
                   </figure>
                 );

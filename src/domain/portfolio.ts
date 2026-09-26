@@ -48,7 +48,7 @@ export function getMediaOrientation(
   width: number | null | undefined,
   height: number | null | undefined,
 ): MediaOrientation | "unknown" {
-  if (!width || !height) return "unknown";
+  if (!width || !height || width <= 0 || height <= 0) return "unknown";
   if (width > height) return "landscape";
   if (height > width) return "portrait";
   return "square";

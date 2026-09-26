@@ -161,14 +161,15 @@ export async function listPublishedPortfolioWorks(): Promise<PublicPortfolioWork
     if (error || !items) return [];
 
     const ids = items.map((i) => i.id);
-    const { data: allMedia } =
+    const { data: allMedia, error: mediaError } =
       ids.length > 0
         ? await supabase
             .from("portfolio_item_media")
             .select("id, portfolio_item_id, storage_path, position, width, height, aspect_ratio, alt_text")
             .in("portfolio_item_id", ids)
             .order("position", { ascending: true })
-        : { data: [] };
+        : { data: [], error: null };
+    if (mediaError) return [];
 
     const mediaByItem = new Map<string, MediaRow[]>();
     for (const m of (allMedia as (MediaRow & { portfolio_item_id: string })[]) ?? []) {

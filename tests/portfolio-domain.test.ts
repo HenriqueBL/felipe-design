@@ -52,9 +52,12 @@ describe("Portfolio domain — aspect ratio & orientation", () => {
     expect(getMediaOrientation(1000, 1000)).toBe("square");
   });
 
-  it("defaults to landscape when dimensions are missing", () => {
-    expect(getMediaOrientation(null, null)).toBe("landscape");
-    expect(getMediaOrientation(undefined, undefined)).toBe("landscape");
+  it("returns unknown when dimensions are missing or invalid", () => {
+    expect(getMediaOrientation(null, null)).toBe("unknown");
+    expect(getMediaOrientation(undefined, undefined)).toBe("unknown");
+    expect(getMediaOrientation(0, 100)).toBe("unknown");
+    expect(getMediaOrientation(100, 0)).toBe("unknown");
+    expect(getMediaOrientation(-1, 100)).toBe("unknown");
   });
 });
 
