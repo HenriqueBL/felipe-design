@@ -245,6 +245,155 @@ a:hover {
   overflow: hidden;
 }
 
+/* ─── Adaptive Hero: Editorial mode (portrait/square/unknown) ───── */
+.cinematic-hero--editorial {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  padding: 120px 0 80px;
+  background: var(--bg);
+}
+
+.cinematic-hero-editorial-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.cinematic-hero-editorial-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.cinematic-hero-editorial-img {
+  object-fit: contain !important;
+}
+
+@media (max-width: 900px) {
+  .cinematic-hero--editorial {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 100px 0 60px;
+  }
+
+  .cinematic-hero-editorial-stage {
+    aspect-ratio: 3 / 4;
+    max-height: 60vh;
+  }
+}
+
+/* ─── Public Gallery: Work-level editorial compositions ────────── */
+.gallery-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 80px;
+}
+
+.gallery-work {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gallery-work-caption {
+  max-width: 680px;
+}
+
+.gallery-work-title {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  margin: 0 0 8px;
+  color: var(--text-strong);
+}
+
+.gallery-work-desc {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* 1 media: single protagonist stage */
+.gallery-work--1 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.gallery-work--1 .gallery-work-angle {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* 2 media: balanced dual stage */
+.gallery-work--2 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* 3 media desktop: Angle1 large left, Angle2/3 stacked right with equal height */
+.gallery-work--3 .gallery-work-media {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+}
+
+.gallery-work--3 .gallery-work-angle-1 {
+  grid-row: span 2;
+}
+
+.gallery-work--3 .gallery-work-angle-2,
+.gallery-work--3 .gallery-work-angle-3 {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.gallery-work-angle {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.gallery-work-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.gallery-work-contain-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.gallery-work-img-contain {
+  object-fit: contain !important;
+}
+
+@media (max-width: 900px) {
+  .gallery-work--2 .gallery-work-media,
+  .gallery-work--3 .gallery-work-media {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-work--3 .gallery-work-angle-1 {
+    grid-row: auto;
+  }
+
+  .gallery-grid {
+    gap: 48px;
+  }
+}
+
 .cinematic-hero-media {
   position: absolute;
   inset: 0;
