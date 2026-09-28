@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
+### Added
+
+- Portfolio media integrity constraints: `portfolio_item_media` table, `hero_media_id`, focal point support, position CHECK (1..3), UNIQUE deferrable constraint, and hero ownership trigger (migrations 0022–0027).
+- Secure `remove_portfolio_media(UUID)` RPC with SECURITY DEFINER and `auth.uid()` authority (migration 0027).
+- Grant hardening: EXECUTE on `remove_portfolio_media(UUID)` revoked from PUBLIC/anon, granted only to authenticated (migration 0028).
+- Blue/green production deployment infrastructure with isolated Compose project and nginx upstream cutover.
+
+### Security
+
+- Removed vulnerable 2-arg `remove_portfolio_media(UUID, UUID)` function that allowed privilege escalation via caller-supplied admin UUID.
+- Hardened 1-arg `remove_portfolio_media(UUID)` grants: PUBLIC and anon can no longer invoke the RPC; authenticated callers still pass through internal `auth.uid()` admin check.
+- Production geo remains disabled (`TRUSTED_GEO_SOURCE` unset); forged `CF-IPCountry`, `X-Vercel-IP-Country`, `X-Test-Country`, and `X-Origin-Country` headers are ignored.
+
+### Deployment
+
+- Production release SHA: `38750e5492b8b7ffccc5d12b6a222d3c673c32b5`.
+- Database migrated through 0028 (grant hardening).
+- Active production served via GREEN container on `127.0.0.1:3310`.
+- BLUE rollback container retained on `127.0.0.1:3300`.
+- Nginx upstream switched from 3300 to 3310; backup at `/etc/nginx/sites-available/felipesilvadesign.com.pre-green-20260928T165811`.
+- Cloudflare, DNS, UFW unchanged.
+
 ## [0.1.0] - 2026-09-15
 
 ### Added
